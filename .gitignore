@@ -214,5 +214,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# macOS
+.DS_Store
+
+# Project config
+AGENTS.md
+
 # Streamlit
 .streamlit/secrets.toml
