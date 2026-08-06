@@ -222,3 +222,13 @@ AGENTS.md
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Lab3 datos
+# El dataset ASL Alphabet no se versiona. Se descarga con la API de Kaggle
+# hacia la cache de kagglehub en ~/.cache/kagglehub, fuera del repositorio.
+# Ver Lab3/Lab3.ipynb para el detalle de la descarga.
+Lab3/data/asl-dataset/
+Lab3/data/procesado/
+Lab3/data/team-dataset/*
+!Lab3/data/team-dataset/.gitkeep
+*.npz
