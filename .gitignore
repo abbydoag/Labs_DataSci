@@ -229,6 +229,7 @@ AGENTS.md
 # Ver Lab3/Lab3.ipynb para el detalle de la descarga.
 Lab3/data/asl-dataset/
 Lab3/data/procesado/
+Lab3/data/*.csv
 Lab3/data/team-dataset/*
 !Lab3/data/team-dataset/.gitkeep
 *.npz
