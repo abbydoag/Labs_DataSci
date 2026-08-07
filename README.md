@@ -22,6 +22,7 @@ de Lenguaje de Senas Americano (ASL).
     ├── 01_EDA.ipynb            # Analisis exploratorio (ejercicios 1 y 2)
     ├── 02_Preprocesamiento.ipynb # Preprocesamiento de imagenes (ejercicio 3)
     ├── 03_Modelos_y_Plan.ipynb # Arquitecturas y plan de procesamiento
+    ├── requirements.txt        # Dependencias del laboratorio
     └── data/                   # Datos derivados, no se versionan
 ```
 
@@ -36,9 +37,20 @@ Los notebooks se corren en orden. `01_EDA.ipynb` descarga el dataset y deja la
 division en `data/division.csv`, `02_Preprocesamiento.ipynb` genera los tensores
 en `data/procesado/` y `03_Modelos_y_Plan.ipynb` los consume.
 
-El entorno es `base-ds` con Python 3.13.5. Los modelos usan PyTorch con backend
-MPS porque TensorFlow esta instalado pero falla al importar en esta maquina.
-Dependencias adicionales: `pip install kagglehub torchvision`.
+El laboratorio trae su propio entorno virtual con Python 3.13.5. Desde la
+carpeta `Lab3`:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+`requirements.txt` fija solo las dependencias que los notebooks importan. En
+Jupyter o VS Code hay que seleccionar el interprete `.venv` antes de correr las
+celdas. El entorno no se versiona, esta en el `.gitignore`.
+
+Los modelos usan PyTorch con backend MPS, disponible en equipos Apple con chip
+propio. Si no hay MPS el codigo cae a CPU sin cambios.
 
 ## Nota sobre el informe
 
