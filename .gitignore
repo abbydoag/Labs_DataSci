@@ -233,3 +233,8 @@ Lab3/data/*.csv
 Lab3/data/team-dataset/*
 !Lab3/data/team-dataset/.gitkeep
 *.npz
+
+# Lab4 datos geoespaciales (raster/TIFF)
+Lab4/data/*.tif
+Lab4/data/**/*.tif
+!Lab4/data/.gitkeep
