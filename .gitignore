@@ -241,4 +241,7 @@ Lab3/data/team-dataset/*
 Lab4/data/raw/
 Lab4/data/derived/
 Lab4/data/figuras/
+Lab4/data/*.tif
+Lab4/data/**/*.tif
+!Lab4/data/.gitkeep
 !Lab4/data/**/.gitkeep
