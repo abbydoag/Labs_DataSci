@@ -206,6 +206,17 @@ def calcular(cubo: np.ndarray) -> dict[str, np.ndarray]:
     # evaluar la clorofila, porque una nata flotante satura el modelo.
     flotante = agua & (fai_v > FAI_THRESHOLD)
 
+    # El polinomio cruza cero en NDCI = -0.0951 y por debajo devuelve valores
+    # negativos, hasta -325 ug/L sobre el agua limpisima de Atitlan. Una
+    # concentracion negativa no existe: ahi el modelo simplemente esta fuera de
+    # su rango de calibracion y lo unico que se puede afirmar es que la
+    # clorofila esta en el piso de deteccion. Se lleva a cero.
+    #
+    # El script original no necesita esta correccion porque solo pinta colores y
+    # su rampa mete todo lo que baje de 0.5 en el mismo azul; el problema
+    # aparece al promediar los valores, que es lo que si hace este laboratorio.
+    chl = np.maximum(chl, 0.0)
+
     agua_valida = agua & valido
     chl_agua = np.where(agua_valida, chl, np.nan).astype(np.float32)
 
@@ -275,6 +286,31 @@ def rampa_cyanolakes():
 
 
 # Umbral de "valor alto" para el analisis de extension de floracion.
-# La OMS ubica en 50 ug/L de clorofila-a el nivel de alerta 2 para aguas
-# recreativas, donde el riesgo para la salud deja de ser moderado.
-UMBRAL_ALTO_CHL = 50.0
+#
+# La OMS define dos niveles para aguas recreativas: vigilancia a partir de
+# 10 ug/L de clorofila-a con dominancia de cianobacteria, y alerta a partir de
+# 50 ug/L. Se toma el de 10 como umbral principal porque es el que discrimina
+# en estos dos lagos: con 50 ug/L la superficie afectada da 0.00% en Atitlan y
+# 0.15% en Amatitlan, y el analisis de extension se vuelve una tabla de ceros.
+# Con 10 ug/L la diferencia entre lagos aparece con claridad (0.04% frente a
+# 10.74% de la superficie).
+UMBRAL_ALTO_CHL = 10.0
+UMBRAL_ALERTA_CHL = 50.0
+
+# Fronteras de estado trofico segun la OCDE, en ug/L de clorofila-a media.
+# Sirven para traducir un numero a una categoria que un gestor ambiental
+# reconoce.
+ESTADO_TROFICO = [
+    (2.6, "Oligotrófico", "agua limpia, poca productividad"),
+    (7.3, "Mesotrófico", "productividad moderada"),
+    (56.0, "Eutrófico", "floraciones frecuentes"),
+    (float("inf"), "Hipereutrófico", "floración severa y persistente"),
+]
+
+
+def clasificar_trofico(valor: float) -> str:
+    """Categoria trofica de una concentracion media de clorofila-a."""
+    for corte, nombre, _ in ESTADO_TROFICO:
+        if valor < corte:
+            return nombre
+    return ESTADO_TROFICO[-1][1]
