@@ -233,3 +233,12 @@ Lab3/data/*.csv
 Lab3/data/team-dataset/*
 !Lab3/data/team-dataset/.gitkeep
 *.npz
+
+# Lab4 datos
+# Las escenas Sentinel-2 se descargan con openEO desde el Copernicus Data Space.
+# Son cientos de MB de GeoTIFF y se reconstruyen con `python -m src.descarga`.
+# Ver Lab4/Lab4.ipynb para el detalle de la descarga.
+Lab4/data/raw/
+Lab4/data/derived/
+Lab4/data/figuras/
+!Lab4/data/**/.gitkeep
