@@ -146,4 +146,5 @@ def catalogo() -> pd.DataFrame:
 
 def ruta_tif(lago: str, fecha: str) -> Path:
     """Ruta del GeoTIFF de una escena."""
-    return CRUDO / lago / f"{lago}_{fecha}.tif"
+    fecha_sin_guiones = fecha.replace("-", "")
+    return DATOS / f"{lago.lower()}_{fecha_sin_guiones}.tif"

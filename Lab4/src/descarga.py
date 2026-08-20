@@ -32,6 +32,7 @@ from .config import (
     BANDAS,
     COLECCION,
     CRUDO,
+    DATOS,
     FECHAS,
     RESOLUCION_M,
     URL_OPENEO,
@@ -127,10 +128,11 @@ def estado() -> None:
     else:
         print("Pendientes:        0")
     for lago in FECHAS:
-        carpeta = CRUDO / lago
-        if carpeta.exists():
-            peso = sum(p.stat().st_size for p in carpeta.glob("*.tif")) / 1e6
-            print(f"{lago}: {len(list(carpeta.glob('*.tif')))} archivos, {peso:.0f} MB")
+        patron = f"{lago.lower()}_*.tif"
+        archivos = list(DATOS.glob(patron))
+        if archivos:
+            peso = sum(p.stat().st_size for p in archivos) / 1e6
+            print(f"{lago}: {len(archivos)} archivos, {peso:.0f} MB")
 
 
 def descargar_todo(trabajadores: int = 1) -> None:
