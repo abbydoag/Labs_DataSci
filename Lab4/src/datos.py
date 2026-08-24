@@ -201,17 +201,45 @@ def tabla_pixeles(recalcular: bool = False, n: int = 20000) -> pd.DataFrame:
     return tabla
 
 
+def distancia_orilla(agua: np.ndarray) -> np.ndarray:
+    """Distancia de cada pixel al borde del espejo de agua, en metros.
+
+    Las floraciones no se reparten de forma uniforme: se acumulan en bahias
+    someras, en ensenadas resguardadas del viento y frente a las
+    desembocaduras, todas ellas cerca de la orilla. Un pixel en el centro del
+    lago y uno pegado a la costa son situaciones distintas aunque su firma
+    espectral se parezca, y el modelo no tiene forma de distinguirlas si no se
+    le dice.
+
+    Se calcula con la transformada de distancia euclidiana sobre la mascara de
+    agua, que devuelve para cada pixel de agua la distancia al pixel de tierra
+    mas cercano. La mascara se rodea antes de un marco de tierra para que el
+    agua que toca el borde del recorte no quede con una distancia inventada.
+    """
+    from scipy import ndimage
+
+    con_marco = np.pad(agua, 1, mode="constant", constant_values=False)
+    distancia = ndimage.distance_transform_edt(con_marco)[1:-1, 1:-1]
+    return (distancia * RESOLUCION_M).astype(np.float32)
+
+
 def construir_dataset_ml(recalcular: bool = False) -> pd.DataFrame:
     """Construye el dataset completo para ML.
 
     Cada fila es un pixel de agua valida dentro de alguno de los lagos.
     Columnas:
-        - x, y: coordenadas en el sistema de referencia del raster (UTM)
+        - x, y: coordenadas en el sistema de referencia del raster (UTM 15N)
+        - fila, columna: posicion del pixel dentro de la rejilla del raster
+        - dist_orilla_m: distancia al borde del espejo de agua, en metros
         - lago: "Atitlan" o "Amatitlan"
         - fecha: fecha de adquisicion
         - B02, B03, B04, B05, B07, B08, B8A, B11, B12, B10: reflectancia
         - ndvi, ndwi, ndci, fai: indices espectrales
         - chl: clorofila-a en ug/L
+
+    `fila` y `columna` se guardan porque el ejercicio 9 necesita devolver las
+    predicciones a la rejilla del raster para dibujar el mapa de probabilidad,
+    y reconstruirlas desde x e y obliga a invertir la transformacion afin.
 
     Se guardan en data/derived/dataset_ml.parquet.
     """
@@ -236,6 +264,9 @@ def construir_dataset_ml(recalcular: bool = False) -> pd.DataFrame:
         datos_pixel = {
             "x": np.array(xs, dtype=np.float64),
             "y": np.array(ys, dtype=np.float64),
+            "fila": rows.astype(np.int32),
+            "columna": cols.astype(np.int32),
+            "dist_orilla_m": distancia_orilla(capas["agua"])[mascara],
             "lago": lago,
             "fecha": pd.Timestamp(fecha),
         }
