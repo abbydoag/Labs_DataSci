@@ -17,8 +17,11 @@ DATOS = BASE / "data"
 CRUDO = DATOS / "raw"
 DERIVADO = DATOS / "derived"
 FIGURAS = DATOS / "figuras"
+# Modelos entrenados de la Parte 2. Se guardan para no reentrenar en cada
+# cuaderno; tampoco se versionan.
+MODELOS = DATOS / "modelos"
 
-for _carpeta in (CRUDO, DERIVADO, FIGURAS):
+for _carpeta in (CRUDO, DERIVADO, FIGURAS, MODELOS):
     _carpeta.mkdir(parents=True, exist_ok=True)
 
 # --- Areas de interes ------------------------------------------------------

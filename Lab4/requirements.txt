@@ -1,5 +1,6 @@
 branca==0.8.2
 folium==0.20.0
+geopandas==1.1.4
 ipykernel==7.3.0
 matplotlib==3.11.1
 nbconvert==7.17.1
@@ -7,6 +8,10 @@ numpy==2.5.2
 openeo==0.51.0
 pandas==2.3.3
 pillow==12.3.0
+pyarrow==25.0.1
 rasterio==1.5.1
 reportlab==5.0.0
+scikit-learn==1.9.0
 scipy==1.18.0
+shap==0.52.0
+xgboost==3.4.1
