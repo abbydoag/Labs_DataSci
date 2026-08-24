@@ -271,3 +271,139 @@ def tabla_metricas(resultados: dict[str, dict]) -> pd.DataFrame:
         .T[ORDEN_METRICAS]
         .round(4)
     )
+
+
+# --- Protocolo de entrenamiento y evaluacion -------------------------------
+
+# Hiperparametros elegidos en el cuaderno 9 con RandomizedSearchCV sobre el
+# criterio PR-AUC. Se fijan aqui para que la validacion espacial, la temporal y
+# los experimentos entre lagos comparen exactamente los mismos modelos y la
+# unica diferencia entre corridas sea la particion de los datos.
+HIPERPARAMETROS = {
+    "Regresión Logística": {"C": 1.0, "l1_ratio": 1.0, "solver": "saga", "max_iter": 10000},
+    "Random Forest": {
+        "n_estimators": 300,
+        "max_depth": 10,
+        "min_samples_leaf": 5,
+        "max_features": "log2",
+    },
+    "XGBoost": {
+        "n_estimators": 400,
+        "max_depth": 6,
+        "learning_rate": 0.1,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "min_child_weight": 1,
+        "tree_method": "hist",
+        "eval_metric": "logloss",
+    },
+}
+
+# La regresion logistica es la unica que necesita las variables estandarizadas.
+NECESITA_ESCALA = {"Regresión Logística": True, "Random Forest": False, "XGBoost": False}
+
+
+def construir_modelo(nombre: str, semilla: int = 42):
+    """Instancia uno de los tres modelos con los hiperparametros del cuaderno 9."""
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from xgboost import XGBClassifier
+
+    parametros = dict(HIPERPARAMETROS[nombre], random_state=semilla)
+    if nombre == "Regresión Logística":
+        return LogisticRegression(**parametros)
+    if nombre == "Random Forest":
+        return RandomForestClassifier(n_jobs=-1, **parametros)
+    return XGBClassifier(n_jobs=-1, **parametros)
+
+
+def entrenar_y_evaluar(
+    nombre: str,
+    X_ent: pd.DataFrame,
+    y_ent: pd.Series,
+    X_prueba: pd.DataFrame,
+    y_prueba: pd.Series,
+    semilla: int = 42,
+    razon: float = 1.0,
+) -> dict:
+    """Entrena un modelo y lo evalua, con el mismo protocolo en todos los cuadernos.
+
+    El protocolo tiene tres pasos y el orden importa:
+
+    1. Se aparta el 30% del entrenamiento como validacion interna, **sin tocar
+       su prevalencia**. Sirve solo para elegir el umbral.
+    2. El 70% restante se submuestrea a `razon` negativos por positivo y ahi se
+       ajusta el modelo.
+    3. El umbral se elige maximizando F2 sobre la validacion interna, que si
+       tiene la prevalencia real, y recien entonces se evalua sobre `X_prueba`.
+
+    Elegir el umbral sobre la muestra balanceada seria un error: ahi la mitad de
+    los pixeles son positivos y el corte optimo no se parece al que hace falta
+    sobre un lago con 1.18%. Y elegirlo sobre `X_prueba` seria mirar la
+    respuesta antes de contestar.
+    """
+    from sklearn.metrics import fbeta_score
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+
+    # Si una particion se queda sin positivos no hay nada que aprender ni que
+    # medir. Pasa en la validacion temporal de Atitlan, donde alguna fecha
+    # aporta menos de diez pixeles positivos.
+    if y_ent.sum() < 2 or y_prueba.sum() < 1:
+        return {"valido": False, "n_pos_ent": int(y_ent.sum()), "n_pos_prueba": int(y_prueba.sum())}
+
+    estratos = y_ent if y_ent.sum() >= 2 else None
+    idx_fit, idx_val = train_test_split(
+        y_ent.index, test_size=0.30, random_state=semilla, stratify=estratos
+    )
+
+    X_fit, y_fit = submuestra_entrenamiento(
+        X_ent.loc[idx_fit], y_ent.loc[idx_fit], razon=razon, semilla=semilla
+    )
+    X_val, y_val = X_ent.loc[idx_val], y_ent.loc[idx_val]
+
+    escalar = NECESITA_ESCALA[nombre]
+    escalador = StandardScaler().fit(X_fit) if escalar else None
+
+    def preparar(XX):
+        return escalador.transform(XX) if escalar else XX
+
+    modelo = construir_modelo(nombre, semilla)
+    modelo.fit(preparar(X_fit), y_fit)
+
+    prob_val = modelo.predict_proba(preparar(X_val))[:, 1]
+    if y_val.sum() > 0:
+        rejilla = np.linspace(0.05, 0.99, 95)
+        puntajes = [
+            fbeta_score(y_val, (prob_val >= u).astype(int), beta=2, zero_division=0)
+            for u in rejilla
+        ]
+        umbral = float(rejilla[int(np.argmax(puntajes))])
+    else:
+        umbral = 0.5
+
+    prob = modelo.predict_proba(preparar(X_prueba))[:, 1]
+    pred = (prob >= umbral).astype(int)
+
+    resultado = metricas(y_prueba, pred, prob)
+    resultado["F2"] = fbeta_score(y_prueba, pred, beta=2, zero_division=0)
+    resultado["umbral"] = umbral
+    resultado["valido"] = True
+    resultado["n_ent"] = len(y_fit)
+    resultado["n_prueba"] = len(y_prueba)
+    resultado["n_pos_prueba"] = int(y_prueba.sum())
+    return resultado
+
+
+def promedio_folds(folds: list[dict]) -> dict:
+    """Media de las metricas sobre los folds validos, con su desviacion."""
+    validos = [f for f in folds if f.get("valido")]
+    if not validos:
+        return {}
+    salida = {}
+    for clave in ORDEN_METRICAS + ["F2"]:
+        valores = [f[clave] for f in validos]
+        salida[clave] = float(np.mean(valores))
+        salida[clave + "_sd"] = float(np.std(valores))
+    salida["folds"] = len(validos)
+    return salida
