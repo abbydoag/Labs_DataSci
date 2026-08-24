@@ -199,3 +199,62 @@ def tabla_pixeles(recalcular: bool = False, n: int = 20000) -> pd.DataFrame:
     tabla = pd.concat(partes, ignore_index=True)
     tabla.to_csv(destino, index=False)
     return tabla
+
+
+def construir_dataset_ml(recalcular: bool = False) -> pd.DataFrame:
+    """Construye el dataset completo para ML.
+
+    Cada fila es un pixel de agua valida dentro de alguno de los lagos.
+    Columnas:
+        - x, y: coordenadas en el sistema de referencia del raster (UTM)
+        - lago: "Atitlan" o "Amatitlan"
+        - fecha: fecha de adquisicion
+        - B02, B03, B04, B05, B07, B08, B8A, B11, B12, B10: reflectancia
+        - ndvi, ndwi, ndci, fai: indices espectrales
+        - chl: clorofila-a en ug/L
+
+    Se guardan en data/derived/dataset_ml.parquet.
+    """
+    destino = DERIVADO / "dataset_ml.parquet"
+    if destino.exists() and not recalcular:
+        return pd.read_parquet(destino)
+
+    partes = []
+    for lago, fecha in escenas_disponibles():
+        cubo, meta = leer_cubo(lago, fecha)
+        capas = ix.calcular(cubo)
+
+        mascara = capas["agua_valida"]
+        if not mascara.any():
+            continue
+
+        rows, cols = np.where(mascara)
+        xs, ys = rasterio.transform.xy(meta["transform"], rows, cols)
+
+        b = ix.reflectancia(cubo)
+
+        datos_pixel = {
+            "x": np.array(xs, dtype=np.float64),
+            "y": np.array(ys, dtype=np.float64),
+            "lago": lago,
+            "fecha": pd.Timestamp(fecha),
+        }
+
+        for nombre_banda in ["B02", "B03", "B04", "B05", "B07", "B08", "B8A", "B11", "B12", "B10"]:
+            datos_pixel[nombre_banda] = b[nombre_banda][mascara]
+
+        datos_pixel["ndvi"] = capas["ndvi"][mascara]
+        datos_pixel["ndwi"] = capas["ndwi"][mascara]
+        datos_pixel["ndci"] = capas["ndci"][mascara]
+        datos_pixel["fai"] = capas["fai"][mascara]
+        datos_pixel["chl"] = capas["chl_agua"][mascara]
+
+        partes.append(pd.DataFrame(datos_pixel))
+
+    if not partes:
+        raise RuntimeError("No hay escenas con pixeles de agua valida")
+
+    tabla = pd.concat(partes, ignore_index=True)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    tabla.to_parquet(destino, index=False)
+    return tabla

@@ -148,5 +148,21 @@ def catalogo() -> pd.DataFrame:
 
 
 def ruta_tif(lago: str, fecha: str) -> Path:
-    """Ruta del GeoTIFF de una escena."""
-    return CRUDO / lago / f"{lago}_{fecha}.tif"
+    """Ruta del GeoTIFF de una escena.
+
+    Conviven dos arreglos de archivos en las maquinas del grupo. `descarga.py`
+    escribe en `data/raw/Atitlan/Atitlan_2025-01-18.tif`, pero parte de las
+    escenas se bajaron a mano y quedaron planas en `data/atitlan_20250118.tif`.
+    Se prueban los dos y se devuelve el que exista, para que los cuadernos
+    corran igual en cualquiera de las dos. Si no hay ninguno se devuelve la ruta
+    canonica, que es donde la descarga va a dejar el archivo.
+    """
+    canonica = CRUDO / lago / f"{lago}_{fecha}.tif"
+    if canonica.exists():
+        return canonica
+
+    plana = DATOS / f"{lago.lower()}_{fecha.replace('-', '')}.tif"
+    if plana.exists():
+        return plana
+
+    return canonica

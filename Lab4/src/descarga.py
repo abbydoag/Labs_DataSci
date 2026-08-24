@@ -31,7 +31,6 @@ from .config import (
     AREAS,
     BANDAS,
     COLECCION,
-    CRUDO,
     FECHAS,
     RESOLUCION_M,
     URL_OPENEO,
@@ -126,11 +125,15 @@ def estado() -> None:
             print(f"  - {lago} {fecha}")
     else:
         print("Pendientes:        0")
-    for lago in FECHAS:
-        carpeta = CRUDO / lago
-        if carpeta.exists():
-            peso = sum(p.stat().st_size for p in carpeta.glob("*.tif")) / 1e6
-            print(f"{lago}: {len(list(carpeta.glob('*.tif')))} archivos, {peso:.0f} MB")
+    for lago, fechas in FECHAS.items():
+        # `ruta_tif` resuelve los dos arreglos de archivos que conviven en el
+        # grupo, asi que se cuenta sobre lo que ella devuelve y no sobre un
+        # glob de una sola carpeta.
+        archivos = [ruta_tif(lago, f) for f in fechas]
+        archivos = [a for a in archivos if a.exists()]
+        if archivos:
+            peso = sum(a.stat().st_size for a in archivos) / 1e6
+            print(f"{lago}: {len(archivos)} archivos, {peso:.0f} MB")
 
 
 def descargar_todo(trabajadores: int = 1) -> None:
