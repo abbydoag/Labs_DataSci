@@ -27,6 +27,8 @@ de la cianobacteria en los lagos de Atitlan y Amatitlan con imagenes Sentinel-2.
 │   └── data/                   # Datos derivados, no se versionan
 │
 └── Lab4/                       # Laboratorio 4: cianobacteria en Atitlan y Amatitlan
+    │
+    │   # Parte 1: analisis geoespacial
     ├── Lab4.ipynb              # Indice y guia de reproduccion
     ├── 01_Descarga_Datos.ipynb # API de Sentinel-2 y descarga (ejercicios 1 y 2)
     ├── 02_Indices.ipynb        # Cianobacteria, NDVI y NDWI (ejercicio 3)
@@ -35,6 +37,19 @@ de la cianobacteria en los lagos de Atitlan y Amatitlan con imagenes Sentinel-2.
     ├── 05_Correlaciones_y_Comparacion.ipynb # Correlaciones y lagos (ejercicios 6 y 7)
     ├── 06_Analisis_Adicional.ipynb     # Exploratorio adicional (ejercicio 8)
     ├── Informe_Lab4.pdf        # Informe para publico no tecnico
+    │
+    │   # Parte 2: modelos de aprendizaje automatico
+    ├── Lab4_Parte2.ipynb       # Indice y resultados principales
+    ├── 07_PrepDatos_ML.ipynb   # Conjunto de datos y exploratorio (ejercicio 1)
+    ├── 08_VarRespuesta_SelVar_DivDatos.ipynb # Respuesta y predictoras (ejercicios 2 y 3)
+    ├── 09_Modelos_ML.ipynb     # Los tres modelos y su evaluacion (ejercicios 4 y 5)
+    ├── 10_Validacion_Espacial_Temporal.ipynb # Bloques y fechas (ejercicio 6)
+    ├── 11_Generalizacion_Lagos.ipynb   # Transferencia entre lagos (ejercicio 7)
+    ├── 12_Interpretabilidad.ipynb      # Importancia y SHAP (ejercicio 8)
+    ├── 13_Mapas_Predictivos.ipynb      # Mapas de probabilidad (ejercicio 9)
+    ├── 14_Conclusiones.ipynb   # Analisis y limitaciones (ejercicio 10)
+    ├── Informe_Lab4_Parte2.pdf # Informe tecnico de la Parte 2
+    │
     ├── src/                    # Codigo compartido por los notebooks
     ├── geojson/                # Poligonos de los dos lagos
     ├── requirements.txt        # Dependencias del laboratorio
@@ -69,9 +84,12 @@ propio. Si no hay MPS el codigo cae a CPU sin cambios.
 
 ## Laboratorio 4: datos y entorno
 
-Las imagenes vienen de la coleccion `SENTINEL2_L2A` del Copernicus Data Space
+Las imagenes vienen de la coleccion `SENTINEL2_L1C` del Copernicus Data Space
 Ecosystem, accedida por programa con el modulo `openeo`. Se usan exclusivamente
-las 22 fechas que fija el enunciado, 11 por lago.
+las 22 fechas que fija el enunciado, 11 por lago. La eleccion de L1C sobre L2A
+es un resultado del propio laboratorio y esta explicada en `Lab4/Lab4.ipynb`: el
+script de cianobacteria esta calibrado para L1C y sobre L2A el indice se rompe
+en agua muy clara.
 
 No se descargan escenas completas. Para cada fecha se pide al servidor un cubo
 recortado al rectangulo del lago, limitado a un solo dia y a 10 de las 13 bandas,
@@ -105,6 +123,36 @@ piden nada. **No hay ninguna contrasena en el repositorio.**
 
 Los notebooks se corren en orden despues de la descarga.
 
+## Laboratorio 4, Parte 2: modelos de aprendizaje automatico
+
+La segunda parte usa los rasters de la primera para entrenar modelos que
+identifiquen zonas con alta presencia de cianobacteria. Es un problema de
+clasificacion binaria: dado el espectro de un pixel de agua, se predice si supera
+o no el nivel de vigilancia de 10 ug/L de la OMS.
+
+El conjunto de datos tiene 3,759,121 observaciones, una por pixel de agua valida
+en cada una de las 22 escenas, de las que el 1.18% son positivas. Se construye
+con `datos.construir_dataset_ml()` y no se versiona.
+
+Lo que decide este laboratorio es la fuga de datos. La etiqueta se construye
+umbralando la clorofila, la clorofila es un polinomio del NDCI y el NDCI sale de
+B04 y B05, asi que al despejar resulta que "chl > 10" equivale exactamente a
+"B05 > 1.636 * B04": una desigualdad lineal entre dos columnas de la tabla. Un
+modelo que reciba esas dos bandas devuelve un ROC-AUC de 1.0000 sin haber
+aprendido nada. Por eso quedan fuera B04, B05, el NDCI, la clorofila, el NDVI y
+el FAI, y el conjunto final tiene 16 predictoras. La lista de exclusiones con su
+motivo esta en `src/ml.py`.
+
+Gana XGBoost, con recall de 0.9729 y precision de 0.8429 sobre el conjunto de
+prueba con la prevalencia real. Se compara con F2 y no con F1 porque el falso
+negativo es el error grave: un falso positivo manda a alguien a muestrear una
+zona limpia y se corrige en dias, mientras que una floracion no detectada no
+genera ninguna senal que permita corregirla.
+
+Las cinco dependencias que agrega la Parte 2 —scikit-learn, xgboost, shap,
+geopandas y pyarrow— ya estan en `requirements.txt`. Los cuadernos 07 al 14 se
+corren en orden despues de los seis de la Parte 1.
+
 ## Nota sobre los informes
 
 Para los laboratorios 1 a 3 no se incluye un archivo PDF por separado. Los
@@ -112,7 +160,10 @@ notebooks (`.ipynb`) ya contienen el analisis completo con explicaciones,
 interpretaciones, graficas y conclusiones integradas en celdas markdown,
 cumpliendo con lo indicado en las instrucciones del laboratorio.
 
-El laboratorio 4 si incluye `Lab4/Informe_Lab4.pdf`, porque el enunciado pide
-expresamente un informe dirigido a ambientalistas sin conocimientos de
-programacion. Ese documento resume los hallazgos sin codigo; el detalle tecnico
-sigue estando en los notebooks.
+El laboratorio 4 si incluye dos PDF. `Lab4/Informe_Lab4.pdf` corresponde a la
+Parte 1 y esta dirigido a ambientalistas sin conocimientos de programacion, como
+pide ese enunciado: resume los hallazgos sin codigo. `Lab4/Informe_Lab4_Parte2.pdf`
+corresponde a la Parte 2 y es tecnico, con las tablas de metricas, la comparacion
+de las estrategias de validacion, la interpretacion con SHAP y los mapas
+predictivos. Los dos se regeneran con `informe.py` e `informe_parte2.py`
+respectivamente. El detalle completo sigue estando en los notebooks.
