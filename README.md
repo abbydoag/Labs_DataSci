@@ -4,6 +4,8 @@ Laboratorios 1 y 2 sobre series de tiempo aplicadas a datos de migracion de
 Guatemala (INGUAT). Laboratorio 3 sobre reconocimiento de imagenes del alfabeto
 de Lenguaje de Senas Americano (ASL). Laboratorio 4 sobre analisis geoespacial
 de la cianobacteria en los lagos de Atitlan y Amatitlan con imagenes Sentinel-2.
+Laboratorio 5 sobre mineria de textos y analisis de sentimiento aplicados a la
+clasificacion de tweets que se refieren o no a un desastre real.
 
 ## Estructura del proyecto
 
@@ -26,34 +28,45 @@ de la cianobacteria en los lagos de Atitlan y Amatitlan con imagenes Sentinel-2.
 │   ├── requirements.txt        # Dependencias del laboratorio
 │   └── data/                   # Datos derivados, no se versionan
 │
-└── Lab4/                       # Laboratorio 4: cianobacteria en Atitlan y Amatitlan
-    │
-    │   # Parte 1: analisis geoespacial
-    ├── Lab4.ipynb              # Indice y guia de reproduccion
-    ├── 01_Descarga_Datos.ipynb # API de Sentinel-2 y descarga (ejercicios 1 y 2)
-    ├── 02_Indices.ipynb        # Cianobacteria, NDVI y NDWI (ejercicio 3)
-    ├── 03_Analisis_Temporal.ipynb      # Evolucion y picos (ejercicio 4)
-    ├── 04_Analisis_Espacial.ipynb      # Mapas y persistencia (ejercicio 5)
-    ├── 05_Correlaciones_y_Comparacion.ipynb # Correlaciones y lagos (ejercicios 6 y 7)
-    ├── 06_Analisis_Adicional.ipynb     # Exploratorio adicional (ejercicio 8)
-    ├── Informe_Lab4.pdf        # Informe para publico no tecnico
-    │
-    │   # Parte 2: modelos de aprendizaje automatico
-    ├── Lab4_Parte2.ipynb       # Indice y resultados principales
-    ├── 07_PrepDatos_ML.ipynb   # Conjunto de datos y exploratorio (ejercicio 1)
-    ├── 08_VarRespuesta_SelVar_DivDatos.ipynb # Respuesta y predictoras (ejercicios 2 y 3)
-    ├── 09_Modelos_ML.ipynb     # Los tres modelos y su evaluacion (ejercicios 4 y 5)
-    ├── 10_Validacion_Espacial_Temporal.ipynb # Bloques y fechas (ejercicio 6)
-    ├── 11_Generalizacion_Lagos.ipynb   # Transferencia entre lagos (ejercicio 7)
-    ├── 12_Interpretabilidad.ipynb      # Importancia y SHAP (ejercicio 8)
-    ├── 13_Mapas_Predictivos.ipynb      # Mapas de probabilidad (ejercicio 9)
-    ├── 14_Conclusiones.ipynb   # Analisis y limitaciones (ejercicio 10)
-    ├── Informe_Lab4_Parte2.pdf # Informe tecnico de la Parte 2
-    │
-    ├── src/                    # Codigo compartido por los notebooks
-    ├── geojson/                # Poligonos de los dos lagos
+├── Lab4/                       # Laboratorio 4: cianobacteria en Atitlan y Amatitlan
+│   │
+│   │   # Parte 1: analisis geoespacial
+│   ├── Lab4.ipynb              # Indice y guia de reproduccion
+│   ├── 01_Descarga_Datos.ipynb # API de Sentinel-2 y descarga (ejercicios 1 y 2)
+│   ├── 02_Indices.ipynb        # Cianobacteria, NDVI y NDWI (ejercicio 3)
+│   ├── 03_Analisis_Temporal.ipynb      # Evolucion y picos (ejercicio 4)
+│   ├── 04_Analisis_Espacial.ipynb      # Mapas y persistencia (ejercicio 5)
+│   ├── 05_Correlaciones_y_Comparacion.ipynb # Correlaciones y lagos (ejercicios 6 y 7)
+│   ├── 06_Analisis_Adicional.ipynb     # Exploratorio adicional (ejercicio 8)
+│   ├── Informe_Lab4.pdf        # Informe para publico no tecnico
+│   │
+│   │   # Parte 2: modelos de aprendizaje automatico
+│   ├── Lab4_Parte2.ipynb       # Indice y resultados principales
+│   ├── 07_PrepDatos_ML.ipynb   # Conjunto de datos y exploratorio (ejercicio 1)
+│   ├── 08_VarRespuesta_SelVar_DivDatos.ipynb # Respuesta y predictoras (ejercicios 2 y 3)
+│   ├── 09_Modelos_ML.ipynb     # Los tres modelos y su evaluacion (ejercicios 4 y 5)
+│   ├── 10_Validacion_Espacial_Temporal.ipynb # Bloques y fechas (ejercicio 6)
+│   ├── 11_Generalizacion_Lagos.ipynb   # Transferencia entre lagos (ejercicio 7)
+│   ├── 12_Interpretabilidad.ipynb      # Importancia y SHAP (ejercicio 8)
+│   ├── 13_Mapas_Predictivos.ipynb      # Mapas de probabilidad (ejercicio 9)
+│   ├── 14_Conclusiones.ipynb   # Analisis y limitaciones (ejercicio 10)
+│   ├── Informe_Lab4_Parte2.pdf # Informe tecnico de la Parte 2
+│   │
+│   ├── src/                    # Codigo compartido por los notebooks
+│   ├── geojson/                # Poligonos de los dos lagos
+│   ├── requirements.txt        # Dependencias del laboratorio
+│   └── data/                   # Escenas y derivados, no se versionan
+└── Lab5/                       # Laboratorio 5: clasificacion de tweets sobre desastres
+    ├── Lab5.ipynb              # Limpieza, frecuencias, n-gramas, modelos y funcion (ejercicios 1 a 7)
+    ├── 08_Analisis_Sentimiento.ipynb    # Polaridad con VADER y decision sobre los emoticones (ejercicio 8)
+    ├── 09_Tweets_Extremos.ipynb         # Los diez extremos y el contraste entre categorias (ejercicio 9)
+    ├── 10_Modelo_con_Negatividad.ipynb  # Variable de negatividad y reentrenamiento (ejercicio 10)
+    ├── Informe_Lab5.pdf        # Informe con los once ejercicios (ejercicio 11)
+    ├── informe.py              # Script que regenera el informe
+    ├── src/                    # Codigo compartido por los cuadernos 08 al 10
     ├── requirements.txt        # Dependencias del laboratorio
-    └── data/                   # Escenas y derivados, no se versionan
+    ├── data/                   # train.csv y test.csv de Kaggle
+    └── processed/              # Corpus limpio y puntuaciones de sentimiento
 ```
 
 ## Laboratorio 3: datos y entorno
@@ -153,6 +166,78 @@ Las cinco dependencias que agrega la Parte 2 —scikit-learn, xgboost, shap,
 geopandas y pyarrow— ya estan en `requirements.txt`. Los cuadernos 07 al 14 se
 corren en orden despues de los seis de la Parte 1.
 
+## Laboratorio 5: datos y entorno
+
+El conjunto es *Natural Language Processing with Disaster Tweets* de Kaggle:
+7,613 tweets etiquetados segun se refieran o no a un desastre real. Es pequeno,
+1.4 MB, asi que `Lab5/data/` **si se versiona** y no hace falta descargar nada.
+En `Lab5/processed/` quedan el corpus ya limpio y las puntuaciones de
+sentimiento, que los cuadernos 08 al 10 leen en lugar de recalcular.
+
+El laboratorio trae su propio entorno virtual con Python 3.13.5. Desde la
+carpeta `Lab5`:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+`Lab5.ipynb` cubre los ejercicios 1 al 7 y se corre solo. Los cuadernos 08, 09 y
+10 cubren el resto y se corren en ese orden, porque el 08 escribe el archivo de
+sentimiento que los otros dos consumen. El informe se regenera al final:
+
+```
+.venv/bin/python informe.py
+```
+
+El analisis de polaridad usa **VADER** (Hutto y Gilbert, 2014) a traves del
+paquete `vaderSentiment`, que trae el lexico incluido y no descarga nada en
+tiempo de ejecucion. **TextBlob** entra solo como lexico de contraste, para
+comprobar que las conclusiones no dependen de haber elegido uno en particular.
+Las figuras se escriben en `Lab5/figuras/`, que esta en el `.gitignore` porque
+se regeneran corriendo los cuadernos.
+
+### Dos decisiones que conviene conocer antes de reejecutar
+
+La primera es que **hay dos limpiezas distintas y es a proposito**. La del
+ejercicio 3 deja el texto en minusculas, sin puntuacion, sin digitos y sin
+palabras vacias, y es la que alimenta a los clasificadores. Para el analisis de
+sentimiento se usa una segunda, mucho mas suave, que conserva mayusculas,
+signos de admiracion, negaciones y emoticones. La diferencia no es cosmetica: el
+7.46% de los tweets cambia de signo segun cual de las dos reciba VADER, porque
+al borrar las negaciones `not bad` se contabiliza como `bad`.
+
+La segunda es que **el corpus versionado no esta lematizado**. El ejercicio 3
+envuelve al lematizador de WordNet en un `try` que cae a la identidad si el
+corpus no esta descargado, y en el entorno donde se corrio esa fue la rama que
+se tomo. Comprobado sobre las 7,613 filas, `texto.limpieza_clasificacion` con
+`lematizar=False` reproduce el 99.92% del corpus guardado y con `lematizar=True`
+solo el 40.18%. Por eso el interruptor viene desactivado: si se lematizara en
+`src` pero no en `processed`, el texto de un tweet nuevo dejaria de parecerse al
+de entrenamiento y la funcion de clasificacion perderia exactitud sin aviso.
+
+### Resultados principales
+
+El mejor modelo es la **regresion logistica** con TF-IDF de unigramas y
+bigramas, F1 de 0.7581. La seleccion merece una nota: sobre la particion 80/20
+con semilla 42 ganaba Naive Bayes con F1 de 0.7734, pero al promediar sobre
+quince particiones el orden se invierte y la regresion logistica gana por 1.4
+puntos, muy por encima de la desviacion de ambos. La ventaja de Naive Bayes
+existia solo en esa particion.
+
+Los tweets de desastre **si son mas negativos**, con un efecto moderado: la
+probabilidad de que uno tomado al azar sea mas negativo que uno de la otra
+categoria es 0.6297 contra el 0.50 del azar. Los dos lexicos coinciden en la
+direccion.
+
+La variable de negatividad del ejercicio 10 **no mejora el clasificador**. Sobre
+los mismos tweets de validacion arregla 30 clasificaciones y rompe 26 (McNemar,
+p = 0.689). La razon es que las palabras que aportan negatividad en este corpus
+—`fire`, `disaster`, `bomb`, `killed`— son el vocabulario de desastre, que el
+TF-IDF ya usa como predictoras con pesos aprendidos de los datos: la negatividad
+no es informacion nueva sino una version comprimida de la que el modelo ya
+tenia.
+
 ## Nota sobre los informes
 
 Para los laboratorios 1 a 3 no se incluye un archivo PDF por separado. Los
@@ -167,3 +252,11 @@ corresponde a la Parte 2 y es tecnico, con las tablas de metricas, la comparacio
 de las estrategias de validacion, la interpretacion con SHAP y los mapas
 predictivos. Los dos se regeneran con `informe.py` e `informe_parte2.py`
 respectivamente. El detalle completo sigue estando en los notebooks.
+
+El laboratorio 5 tambien incluye PDF. `Lab5/Informe_Lab5.pdf` recoge los once
+ejercicios del enunciado —la descripcion del conjunto, la limpieza, las
+frecuencias y los n-gramas, los tres modelos, la funcion de clasificacion, el
+analisis de sentimiento, los tweets extremos y la variable de negatividad— con
+sus tablas y figuras referenciadas en el texto. Se regenera con `informe.py`, que
+recalcula todas las cifras desde `data/` y `processed/` para que el documento no
+pueda desincronizarse de los datos.
