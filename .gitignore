@@ -246,3 +246,8 @@ Lab4/data/*.tif
 Lab4/data/**/*.tif
 !Lab4/data/.gitkeep
 !Lab4/data/**/.gitkeep
+
+# Lab5 figuras
+# Las graficas del analisis de sentimiento se regeneran corriendo los cuadernos
+# 08 al 10 y el script informe.py. Ver Lab5/README del repositorio.
+Lab5/figuras/
