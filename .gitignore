@@ -251,3 +251,8 @@ Lab4/data/**/*.tif
 # Las graficas del analisis de sentimiento se regeneran corriendo los cuadernos
 # 08 al 10 y el script informe.py. Ver Lab5/README del repositorio.
 Lab5/figuras/
+
+# Lab6 figuras
+# Las genera cada cuaderno al correrse y el informe las vuelve a dibujar, no
+# tiene sentido versionar imagenes que se reconstruyen solas.
+Lab6/figuras/
