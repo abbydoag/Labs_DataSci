@@ -6,6 +6,9 @@ Forest; cada cuaderno solo cambia el modelo final del pipeline.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pandas as pd
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import OneHotEncoder, StringIndexer, VectorAssembler
@@ -55,6 +58,33 @@ def metricas(pred: DataFrame, col_pred: str = "prediction") -> dict:
                                         metricName=nombre)
         resultado[nombre] = evaluador.evaluate(pred)
     return resultado
+
+
+def ajustar_grilla(train: DataFrame, valid: DataFrame, configuraciones: list[dict],
+                   construir_modelo) -> tuple[pd.DataFrame, dict]:
+    """Ajusta un pipeline por configuracion con train y lo evalua en validacion.
+
+    construir_modelo recibe el diccionario de parametros y devuelve el
+    estimador final (LinearRegression, RandomForestRegressor, ...).
+    """
+    filas, ajustados = [], {}
+    for i, params in enumerate(configuraciones):
+        modelo = pipeline_regresion(construir_modelo(params)).fit(train)
+        en_train = metricas(modelo.transform(train))
+        en_valid = metricas(modelo.transform(valid))
+        filas.append({"config": i, **params,
+                      "rmse_train": en_train["rmse"],
+                      "mae_valid": en_valid["mae"], "rmse_valid": en_valid["rmse"],
+                      "r2_valid": en_valid["r2"]})
+        ajustados[i] = modelo
+    return pd.DataFrame(filas), ajustados
+
+
+def guardar_modelo(modelo, ruta: Path) -> None:
+    """Guarda un PipelineModel y quita los .crc y _SUCCESS que deja Spark."""
+    modelo.write().overwrite().save(str(ruta))
+    for extra in list(ruta.rglob(".*.crc")) + list(ruta.rglob("_SUCCESS")):
+        extra.unlink()
 
 
 def predecir_referencia(train: DataFrame, df: DataFrame) -> tuple[DataFrame, float]:

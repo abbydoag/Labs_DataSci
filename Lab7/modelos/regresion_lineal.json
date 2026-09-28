@@ -1,0 +1,25 @@
+{
+  "modelo": "LinearRegression",
+  "entrenamiento": [
+    "2025T1",
+    "2025T2",
+    "2025T3"
+  ],
+  "validacion": "2025T4",
+  "parametros": {
+    "regParam": 0.0,
+    "elasticNetParam": 0.0,
+    "standardization": true,
+    "maxIter": 100
+  },
+  "metricas_validacion": {
+    "mae": 1210.1374804326156,
+    "rmse": 2186.419578668229,
+    "r2": 0.4256745540389756
+  },
+  "metricas_referencia": {
+    "mae": 1672.5026056435038,
+    "rmse": 2889.5714322659232,
+    "r2": -0.003131603852470688
+  }
+}
