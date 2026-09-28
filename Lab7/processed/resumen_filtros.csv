@@ -1,0 +1,46 @@
+conjunto,paso,restantes,excluidos
+2025T1,inicio,51588,0
+2025T1,edad finita y >= 15,35335,16253
+2025T1,ocupado = 1,22273,13062
+2025T1,asalariado (P05C16 1-4),13419,8854
+2025T1,salario finito y > 0,13419,0
+2025T1,antiguedad en anios >= 0,13419,0
+2025T1,meses entero entre 0 y 11,13419,0
+2025T1,antiguedad <= edad,13419,0
+2025T1,"horas en (0, 168]",13419,0
+2025T2,inicio,51167,0
+2025T2,edad finita y >= 15,35285,15882
+2025T2,ocupado = 1,22343,12942
+2025T2,asalariado (P05C16 1-4),13492,8851
+2025T2,salario finito y > 0,13492,0
+2025T2,antiguedad en anios >= 0,13492,0
+2025T2,meses entero entre 0 y 11,13492,0
+2025T2,antiguedad <= edad,13492,0
+2025T2,"horas en (0, 168]",13492,0
+2025T3,inicio,51583,0
+2025T3,edad finita y >= 15,35816,15767
+2025T3,ocupado = 1,22373,13443
+2025T3,asalariado (P05C16 1-4),13450,8923
+2025T3,salario finito y > 0,13450,0
+2025T3,antiguedad en anios >= 0,13450,0
+2025T3,meses entero entre 0 y 11,13450,0
+2025T3,antiguedad <= edad,13450,0
+2025T3,"horas en (0, 168]",13450,0
+2025T4,inicio,49338,0
+2025T4,edad finita y >= 15,34354,14984
+2025T4,ocupado = 1,21233,13121
+2025T4,asalariado (P05C16 1-4),12664,8569
+2025T4,salario finito y > 0,12664,0
+2025T4,antiguedad en anios >= 0,12664,0
+2025T4,meses entero entre 0 y 11,12664,0
+2025T4,antiguedad <= edad,12664,0
+2025T4,"horas en (0, 168]",12664,0
+2026T1,inicio,49843,0
+2026T1,edad finita y >= 15,35040,14803
+2026T1,ocupado = 1,21734,13306
+2026T1,asalariado (P05C16 1-4),13258,8476
+2026T1,salario finito y > 0,13258,0
+2026T1,antiguedad en anios >= 0,13258,0
+2026T1,meses entero entre 0 y 11,13258,0
+2026T1,antiguedad <= edad,13258,0
+2026T1,"horas en (0, 168]",13258,0
