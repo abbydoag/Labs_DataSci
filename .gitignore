@@ -256,3 +256,12 @@ Lab5/figuras/
 # Las genera cada cuaderno al correrse y el informe las vuelve a dibujar, no
 # tiene sentido versionar imagenes que se reconstruyen solas.
 Lab6/figuras/
+
+# Lab7 figuras y residuos de Spark
+# Las figuras se regeneran corriendo los cuadernos 04 en adelante. Spark deja
+# carpetas de trabajo locales (warehouse, metastore, logs de derby) que no son
+# parte del laboratorio.
+Lab7/figuras/
+spark-warehouse/
+metastore_db/
+derby.log
