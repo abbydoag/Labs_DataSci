@@ -9,7 +9,9 @@ todo el trabajo se hace en Spark. Se puede reconstruir con:
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 
 import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
@@ -35,10 +37,14 @@ TIPOS_NUMERICOS = {
 
 def iniciar_spark() -> SparkSession:
     """Sesion local de Spark con registros de error solamente."""
+    os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
+    log4j = Path(__file__).resolve().parent / "log4j2.properties"
     spark = (
         SparkSession.builder.appName("ENEIC_Lab7")
         .master("local[*]")
         .config("spark.driver.host", "127.0.0.1")
+        .config("spark.driver.extraJavaOptions", f"-Dlog4j.configurationFile={log4j.as_uri()}")
+        .config("spark.ui.showConsoleProgress", "false")
         .config("spark.driver.memory", "4g")
         .config("spark.sql.shuffle.partitions", "8")
         .config("spark.sql.session.timeZone", "UTC")
