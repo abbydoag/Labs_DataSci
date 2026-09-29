@@ -1,0 +1,24 @@
+{
+  "modelo": "RandomForestRegressor",
+  "entrenamiento": [
+    "2025T1",
+    "2025T2",
+    "2025T3"
+  ],
+  "validacion": "2025T4",
+  "parametros": {
+    "numTrees": 50,
+    "maxDepth": 15,
+    "seed": 42
+  },
+  "metricas_validacion": {
+    "mae": 1041.3339550758003,
+    "rmse": 1899.8826496325246,
+    "r2": 0.5663447620466725
+  },
+  "metricas_referencia": {
+    "mae": 1672.5026056435038,
+    "rmse": 2889.5714322659232,
+    "r2": -0.003131603852470688
+  }
+}
