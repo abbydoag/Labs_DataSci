@@ -117,17 +117,146 @@ debe permitir que una persona que no participo en el desarrollo pueda levantar e
 ambiente, descargar los datos, ejecutar el analisis, reproducir los benchmarks y
 generar los resultados principales.
 
+**Equipo:** Abby Donis (22440), Hansel Lopez (19026), Fabian Prado (23427)
+
+**Repositorio.** El laboratorio vive en la carpeta `Lab8/` del repositorio de laboratorios
+del equipo, no en un fork aparte. El primer commit de la carpeta
+(`chore: repositorio base del Lab8 proporcionado por el docente`) es una copia sin cambios de
+`menene/duckdb`, y cada modificacion posterior esta en commits separados: el historial
+muestra que traia el repositorio base y que cambio el equipo. Todas las rutas de este README
+son relativas a `Lab8/`.
+
+**Estado.**
+
+| Ejercicio | Estado | Donde |
+|---|---|---|
+| 1. Ambiente | Listo | Este README y `notebooks/01_Ambiente_y_Descarga.ipynb` |
+| 2. Sistema de descarga | Listo | `scripts/download_data.py` y cuaderno 01 |
+| 3. Consultas directas sobre Parquet | Listo | `notebooks/02_Consultas_Parquet.ipynb`, `sql/02_*.sql` |
+| 4. Analisis exploratorio | Listo | `notebooks/03_Exploratorio.ipynb`, `sql/03_*.sql` |
+| 5 a 9 | Pendiente | Ver "Notas para continuar" al final |
+
+## Estructura del proyecto y proposito de cada carpeta
+
+| Carpeta o archivo | Proposito |
+|---|---|
+| `data/raw/` | Los datos tal como los publica la fuente: Parquet de la TLC en `data/raw/<tipo>/<anio>/` y la tabla de zonas en `data/raw/zonas/`. Nunca se modifican; si algo sale mal se borran y se vuelven a descargar. No se versionan |
+| `data/processed/` | Todo lo que se deriva de los datos: las figuras de los cuadernos (`data/processed/figuras/`) y, en el ejercicio 6, la base materializada de DuckDB. Se regenera, asi que tampoco se versiona |
+| `notebooks/` | El analisis: un cuaderno numerado por ejercicio, cada uno con un archivo `_notes.md` que registra datos usados, decisiones, hallazgos y lo aprendido |
+| `scripts/` | Codigo Python reutilizable: `download_data.py` (descarga y verificacion) y `consultas.py` (conexion a DuckDB y ejecucion de los archivos de `sql/`) |
+| `sql/` | Una consulta por archivo, con objetivo y fuente en el encabezado. `00_vistas.sql` define las vistas comunes; el prefijo de las demas es el cuaderno que las usa |
+| `docs/` | `consultas.md`: objetivo, fuente, resultado, decision y SQL de cada consulta |
+| `Dockerfile`, `requirements.txt` | Imagen del servicio `lab`: Python 3.11.14 y versiones fijas de DuckDB, pandas, pyarrow, matplotlib, requests y JupyterLab |
+| `metabase.Dockerfile` | Imagen de Metabase v0.63.19 con el driver de DuckDB 1.5.5.0 |
+| `docker-compose.yml` | Levanta los dos servicios y monta las carpetas del proyecto dentro de los contenedores |
+
+La separacion tiene un motivo. Lo que entra (`data/raw`) nunca se mezcla con lo que se
+produce (`data/processed`), asi que borrar lo derivado no cuesta nada. El SQL vive aparte del
+Python, para que la consulta documentada y la ejecutada sean la misma. Y todo lo que pesa o
+se puede regenerar queda fuera de Git.
+
 ## Como levantar el ambiente
 
-<!-- TODO (Ejercicio 1.5) -->
+Requisitos: Docker Desktop con Docker Compose y unos 10 GB libres. Las dos imagenes ocupan
+1.16 GB (`lab`) y 1.83 GB (`metabase`), y los datos de 2026 unos 500 MB.
+
+```bash
+cd Lab8
+docker compose up -d --build
+docker compose ps
+```
+
+La primera construccion descarga la imagen de Python, la de Java (Temurin 21), Metabase y el
+driver de DuckDB, y tarda varios minutos. Las siguientes reutilizan las imagenes.
+
+| Servicio | Direccion | Que es |
+|---|---|---|
+| `lab` | http://localhost:8888 | JupyterLab, sin contrasena y publicado solo en 127.0.0.1 |
+| `metabase` | http://localhost:3000 | Metabase con el driver de DuckDB, para el tablero del ejercicio 7 |
+
+Para comprobar que funcionan:
+
+```bash
+curl -s http://localhost:3000/api/health
+docker compose exec lab python -c "import duckdb; print(duckdb.__version__)"
+```
+
+La primera debe responder `{"status":"ok"}` y la segunda `1.5.5`. El cuaderno 01 hace la
+misma verificacion de los dos servicios desde dentro del contenedor `lab`.
+
+Herramientas disponibles (1.4): en `lab`, Python 3.11.14, DuckDB 1.5.5, pandas 3.0.6, pyarrow
+25.0.1, matplotlib 3.11.2, requests 2.34.2, JupyterLab 4.6.4 y `curl`; en `metabase`, Java 21,
+Metabase v0.63.19 y el driver de DuckDB 1.5.5.0. DuckDB tiene la misma version en los dos lados
+porque un archivo `.duckdb` escrito por una version no siempre lo abre otra.
+
+`docker compose down` apaga los servicios. Los datos se conservan porque `data/` es una carpeta
+del proyecto montada en el contenedor, y la configuracion de Metabase vive en el volumen
+`metabase-data`.
+
+**Por que un ambiente reproducible (1.6).** El `Dockerfile` fija la version de Python y de cada
+paquete, y `docker compose` levanta los mismos servicios en cualquier computadora con un solo
+comando. Eso evita que un resultado dependa de lo que cada quien tenga instalado, que el tablero
+deje de abrir la base de DuckDB por una diferencia de version y que alguien no pueda correr el
+analisis por una dependencia que falta. Junto con los datos fuera de Git y un script que los
+vuelve a bajar, cualquier persona reconstruye el mismo punto de partida.
 
 ## Como descargar los datos
 
-<!-- TODO (Ejercicios 2.6, 5.1 y 8.1) -->
+```bash
+docker compose exec lab python scripts/download_data.py              # baja lo que falte
+docker compose exec lab python scripts/download_data.py --verificar  # compara disco y servidor
+```
+
+El script tambien corre fuera de Docker con cualquier Python que tenga `requests`, desde
+cualquier carpeta. Pregunta al servidor de la TLC que meses estan publicados, omite los
+archivos que ya existen, descarga sobre un archivo temporal `.part` que solo se renombra al
+terminar y deja todo en `data/raw/<tipo>/2026/`. Al 2026-10-06 estan publicados enero a agosto:
+16 archivos, 496 MiB y 30,040,469 viajes. Septiembre a diciembre responden 403 y se reportan
+como no publicados; al volver a correr el script se bajan cuando aparezcan.
+
+**Cambios al script del docente (2.6).**
+
+| Problema en el script original | Cambio |
+|---|---|
+| `DIR_DESTINO = Path("data/raw")` dependia del directorio de trabajo: corrido desde `notebooks/` escribia en `notebooks/data/raw` | La ruta se resuelve desde la ubicacion del archivo |
+| `esta_publicado` trataba cualquier error de red como "no publicado", y un mes podia quedar fuera sin aviso | `tamanio_publicado` solo trata 403 y 404 como no publicado; cualquier otro error cuenta como fallo |
+| Nada comparaba lo descargado con lo publicado | El tamanio recibido se compara con el `Content-Length` del servidor y se reintenta si no coincide |
+| No habia forma de revisar una descarga sin repetirla | Opcion `--verificar`: compara mes a mes el tamanio en disco con el del servidor |
+| El analisis necesita pasar de zona a barrio | El script baja tambien `taxi_zone_lookup.csv` |
+
+**Como se determino que la descarga esta completa (2.7).** Con tres pruebas: que meses estan
+publicados se le pregunta al servidor; cada archivo publicado debe pesar en disco exactamente
+lo que anuncia el servidor; y cada archivo debe tener un pie Parquet legible con un numero de
+registros en linea con los meses vecinos. El cuaderno 01 corre las tres y repite la descarga
+para comprobar que no se vuelve a bajar ningun archivo.
+
+<!-- TODO (Ejercicios 5.1 y 8.1) -->
 
 ## Como ejecutar el analisis
 
-<!-- TODO -->
+Los cuadernos se corren en orden, dentro del contenedor `lab`, desde JupyterLab
+(http://localhost:8888) o desde la terminal:
+
+```bash
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/01_Ambiente_y_Descarga.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/02_Consultas_Parquet.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/03_Exploratorio.ipynb
+```
+
+| Cuaderno | Ejercicio | Que responde | Tiempo aproximado |
+|---|---|---|---|
+| `01_Ambiente_y_Descarga` | 1 y 2 | Si los servicios funcionan y si la descarga de 2026 esta completa. Si no hay datos, los baja | 10 s, o 40 s con la descarga |
+| `02_Consultas_Parquet` | 3 | Archivos, registros, columnas, tipos, muestra, calidad y costo de leer Parquet directo | 25 s |
+| `03_Exploratorio` | 4 | Siete preguntas sobre tiempo, caracteristicas, geografia, pago, montos y atipicos | 25 s |
+
+Los tiempos son de una Mac de 10 nucleos con 8 GB asignados a Docker.
+
+Las consultas tambien se pueden correr sueltas. `consultas.conectar()` abre DuckDB en memoria
+con las vistas de `sql/00_vistas.sql`, y `consultas.correr` ejecuta un archivo de `sql/`:
+
+```bash
+docker compose exec -w /workspace/scripts lab python -c "import consultas; print(consultas.correr(consultas.conectar(), '03_barrios.sql'))"
+```
 
 ## Como reproducir los benchmarks
 
@@ -135,4 +264,35 @@ generar los resultados principales.
 
 ## Como generar los resultados principales
 
-<!-- TODO -->
+Las figuras de los ejercicios 1 a 4 las escriben los cuadernos en `data/processed/figuras/` y
+las tablas de resultados quedan en las salidas de cada cuaderno. Los hallazgos principales del
+exploratorio, con sus cifras, estan en la seccion 8 de `notebooks/03_Exploratorio.ipynb`: los
+amarillos y los verdes atienden mercados distintos (86.6% de los amarillos sale de Manhattan;
+39.1% de los verdes, de East Harlem), la duracion de un viaje casi no cambia con la hora pero la
+velocidad se reduce a la mitad, el verano baja 18.5% los viajes diarios de los amarillos, el
+total no coincide con la suma de sus componentes en 36.9% de los amarillos por como reportan
+algunos proveedores, y la propina solo existe en los datos cuando se paga con tarjeta.
+
+<!-- TODO (Ejercicios 6 a 8) -->
+
+## Notas para continuar (ejercicios 5 a 9)
+
+- **Ejercicio 5 (2024).** El anio esta fijo en `ANIO = 2026` dentro de `download_data.py`;
+  generalizarlo es la tarea 5.1. Los archivos nuevos deben caer en `data/raw/<tipo>/2024/`,
+  y las vistas los toman solas porque leen `data/raw/<tipo>/*/*.parquet`. `viajes_validos` ya
+  compara cada viaje con el mes de su propio archivo, asi que funciona con cualquier anio.
+  Para la tarea 5.7: `03_viajes_por_mes.sql` y `03_pago_por_mes.sql` agrupan por `mes` sin
+  `anio` porque hasta ahora solo habia 2026; las demas consultas agregan sobre todo el periodo.
+- **Ejercicio 6 (benchmark).** Las mismas consultas de `sql/` pueden correr contra los Parquet
+  o contra tablas, si las tablas se llaman igual que las vistas. Probado con una muestra: desde
+  `con = consultas.conectar()`, `attach 'data/processed/taxis.duckdb' as bench`,
+  `create table bench.viajes_validos as select * from viajes_validos` y lo mismo con `zonas`.
+  Despues, `consultas.conectar(base="data/processed/taxis.duckdb", vistas=False)` corre los
+  archivos `03_*.sql` sin cambios. La tabla no se puede crear en la misma base donde estan las
+  vistas, porque el nombre choca. `consultas.correr_medido` devuelve el tiempo de cada consulta.
+- **Ejercicio 7 (tablero).** Metabase ve los datos en `/workspace/data`. Las vistas usan rutas
+  relativas que resuelve `consultas.py`, asi que para Metabase lo directo es apuntar en modo de
+  solo lectura a la base materializada del ejercicio 6.
+- **Calidad.** Las decisiones de limpieza y su motivo estan en la seccion 8 del cuaderno 02. Lo
+  mas importante: el proveedor 7 no registra la hora de llegada, el proveedor 1 reporta
+  codigos de tarifa 99, y en 36.9% de los amarillos el total no es la suma de sus componentes.
