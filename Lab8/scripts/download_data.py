@@ -12,9 +12,11 @@ Uso:
     python scripts/download_data.py                 # amarillos y verdes
     python scripts/download_data.py --taxi yellow
     python scripts/download_data.py --taxi green
+    python scripts/download_data.py --verificar     # solo revisa, no descarga
 
 Los archivos se guardan en:
     data/raw/<tipo>/<anio>/<nombre-original>.parquet
+    data/raw/zonas/taxi_zone_lookup.csv
 
 Comportamiento:
   - La TLC publica cada mes con varias semanas de atraso, por lo que no todos
@@ -23,6 +25,9 @@ Comportamiento:
   - Un archivo que ya existe localmente no se vuelve a descargar.
   - La descarga se hace sobre un nombre temporal y solo se renombra al
     terminar, de modo que una interrupcion no deja archivos .parquet a medias.
+  - El tamanio descargado se compara con el que anuncia el servidor.
+  - Un error de red cuenta como fallo, no como mes no publicado.
+  - Las rutas no dependen del directorio desde donde se corre el script.
 """
 
 import argparse
@@ -34,7 +39,19 @@ import requests
 ANIO = 2026
 TIPOS_TAXI = ("yellow", "green")
 URL_BASE = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-DIR_DESTINO = Path("data/raw")
+
+# La ruta se resuelve desde este archivo y no desde el directorio de trabajo.
+# Con Path("data/raw") el script escribia en notebooks/data/raw si se corria
+# desde la carpeta de cuadernos.
+RAIZ = Path(__file__).resolve().parent.parent
+DIR_DESTINO = RAIZ / "data" / "raw"
+
+# Tabla de zonas de la TLC: traduce PULocationID y DOLocationID a barrio y zona.
+URL_ZONAS = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+RUTA_ZONAS = DIR_DESTINO / "zonas" / "taxi_zone_lookup.csv"
+
+# Codigos con los que el servidor responde a un archivo que no existe.
+NO_PUBLICADO = (403, 404)
 
 TIEMPO_ESPERA = 60          # segundos por peticion
 INTENTOS = 3                # intentos por archivo antes de darse por vencido
@@ -57,13 +74,18 @@ def ruta_destino(tipo: str, mes: int) -> Path:
     return DIR_DESTINO / tipo / str(ANIO) / construir_nombre(tipo, mes)
 
 
-def esta_publicado(url: str) -> bool:
-    """Indica si el archivo existe en el servidor (sin descargarlo)."""
-    try:
-        respuesta = requests.head(url, timeout=TIEMPO_ESPERA, allow_redirects=True)
-    except requests.RequestException:
-        return False
-    return respuesta.ok
+def tamanio_publicado(url: str) -> int | None:
+    """Tamanio en bytes del archivo en el servidor, o None si no esta publicado.
+
+    Antes un error de red se reportaba como "no publicado", y un mes que si
+    existe podia quedar fuera sin que nadie lo notara. Ahora solo 403 y 404
+    cuentan como no publicado; cualquier otro problema lanza la excepcion.
+    """
+    respuesta = requests.head(url, timeout=TIEMPO_ESPERA, allow_redirects=True)
+    if respuesta.status_code in NO_PUBLICADO:
+        return None
+    respuesta.raise_for_status()
+    return int(respuesta.headers.get("Content-Length", 0))
 
 
 def formato_tamanio(n: float) -> str:
@@ -74,8 +96,12 @@ def formato_tamanio(n: float) -> str:
     return f"{n:.1f} GiB"
 
 
-def descargar_archivo(url: str, destino: Path) -> int:
-    """Descarga `url` en `destino`. Devuelve la cantidad de bytes escritos."""
+def descargar_archivo(url: str, destino: Path, esperado: int = 0) -> int:
+    """Descarga `url` en `destino`. Devuelve la cantidad de bytes escritos.
+
+    Si se conoce el tamanio publicado (`esperado`), un archivo que llega con
+    otro tamanio se trata como descarga fallida y se reintenta.
+    """
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporal = destino.with_name(destino.name + SUFIJO_TEMPORAL)
 
@@ -92,6 +118,10 @@ def descargar_archivo(url: str, destino: Path) -> int:
                             escritos += len(bloque)
             if escritos == 0:
                 raise requests.RequestException("el servidor devolvio un archivo vacio")
+            if esperado and escritos != esperado:
+                raise requests.RequestException(
+                    f"se recibieron {escritos} bytes y el servidor anuncia {esperado}"
+                )
             temporal.replace(destino)
             return escritos
         except requests.RequestException as error:
@@ -118,14 +148,20 @@ def descargar(tipo: str) -> dict:
             continue
 
         url = construir_url(tipo, mes)
-        if not esta_publicado(url):
+        try:
+            esperado = tamanio_publicado(url)
+        except requests.RequestException as error:
+            print(f"  {etiqueta}  ERROR al consultar el servidor: {error}")
+            resumen["fallidos"].append(etiqueta)
+            continue
+        if esperado is None:
             print(f"  {etiqueta}  aun no publicado por la TLC")
             resumen["no_publicados"].append(etiqueta)
             continue
 
         print(f"  {etiqueta}  descargando...")
         try:
-            escritos = descargar_archivo(url, destino)
+            escritos = descargar_archivo(url, destino, esperado)
         except requests.RequestException as error:
             print(f"  {etiqueta}  ERROR: {error}")
             resumen["fallidos"].append(etiqueta)
@@ -136,6 +172,57 @@ def descargar(tipo: str) -> dict:
     return resumen
 
 
+def descargar_zonas() -> str:
+    """Descarga la tabla de zonas de la TLC si no existe. Devuelve lo que hizo."""
+    if RUTA_ZONAS.exists() and RUTA_ZONAS.stat().st_size > 0:
+        return "ya existe, se omite"
+    escritos = descargar_archivo(URL_ZONAS, RUTA_ZONAS, tamanio_publicado(URL_ZONAS) or 0)
+    return f"lista ({formato_tamanio(escritos)}) -> {RUTA_ZONAS}"
+
+
+def verificar(tipo: str) -> list[dict]:
+    """Compara, mes a mes, lo que publica la TLC con lo que hay en disco.
+
+    Estados:
+      completo      el archivo local pesa exactamente lo que anuncia el servidor
+      incompleto    existe localmente pero con otro tamanio
+      falta         esta publicado y no esta en disco
+      no publicado  la TLC todavia no lo publica
+    """
+    filas = []
+    for mes in range(1, 13):
+        destino = ruta_destino(tipo, mes)
+        local = destino.stat().st_size if destino.exists() else 0
+        remoto = tamanio_publicado(construir_url(tipo, mes))
+        if remoto is None:
+            estado = "no publicado"
+        elif local == 0:
+            estado = "falta"
+        elif local == remoto:
+            estado = "completo"
+        else:
+            estado = "incompleto"
+        filas.append({
+            "tipo": tipo, "anio": ANIO, "mes": mes, "archivo": destino.name,
+            "bytes_servidor": remoto or 0, "bytes_local": local, "estado": estado,
+        })
+    return filas
+
+
+def imprimir_verificacion(tipos: tuple) -> int:
+    """Imprime la verificacion y devuelve 1 si falta algun mes publicado."""
+    pendientes = 0
+    print(f"{'archivo':<34} {'servidor':>12} {'local':>12}  estado")
+    for tipo in tipos:
+        for fila in verificar(tipo):
+            print(f"{fila['archivo']:<34} {fila['bytes_servidor']:>12,} "
+                  f"{fila['bytes_local']:>12,}  {fila['estado']}")
+            if fila["estado"] in ("falta", "incompleto"):
+                pendientes += 1
+    print(f"\nmeses publicados sin archivo completo en disco: {pendientes}")
+    return 1 if pendientes else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=f"Descarga los datos de taxis de {ANIO} del NYC TLC."
@@ -144,9 +231,16 @@ def main() -> int:
         "--taxi", choices=(*TIPOS_TAXI, "all"), default="all",
         help="tipo de taxi a descargar (por defecto: all)",
     )
+    parser.add_argument(
+        "--verificar", action="store_true",
+        help="no descarga nada; compara lo publicado con lo que hay en disco",
+    )
     argumentos = parser.parse_args()
 
     tipos = TIPOS_TAXI if argumentos.taxi == "all" else (argumentos.taxi,)
+
+    if argumentos.verificar:
+        return imprimir_verificacion(tipos)
 
     total = {"descargados": 0, "omitidos": 0, "no_publicados": [], "fallidos": []}
     for tipo in tipos:
@@ -155,6 +249,12 @@ def main() -> int:
         total["omitidos"] += resumen["omitidos"]
         total["no_publicados"] += [f"{tipo} {m}" for m in resumen["no_publicados"]]
         total["fallidos"] += [f"{tipo} {m}" for m in resumen["fallidos"]]
+
+    try:
+        print(f"\nTabla de zonas: {descargar_zonas()}")
+    except requests.RequestException as error:
+        print(f"\nTabla de zonas: ERROR {error}")
+        total["fallidos"].append("zonas")
 
     print("\n" + "=" * 60)
     print("RESUMEN")
