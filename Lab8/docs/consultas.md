@@ -25,8 +25,8 @@ Convenciones de todas las consultas:
 
 - **Objetivo:** vistas sobre los archivos Parquet de data/raw para que las consultas de analisis no repitan rutas ni nombres distintos por tipo.
 - **Fuente:** data/raw/yellow/*/*.parquet, data/raw/green/*/*.parquet y data/raw/zonas/taxi_zone_lookup.csv.
-- **Resultado:** Cuatro vistas: `yellow`, `green`, `viajes` (los dos tipos con las fechas renombradas a `pickup_datetime` y `dropoff_datetime`) y `zonas`. No copian datos.
-- **Decision:** Los cuadernos 03 en adelante consultan `viajes`. Un anio nuevo en `data/raw` entra en las vistas sin tocar ninguna consulta.
+- **Resultado:** Cinco vistas: `yellow`, `green`, `viajes` (los dos tipos con las fechas renombradas a `pickup_datetime` y `dropoff_datetime`), `viajes_validos` y `zonas`. No copian datos. `viajes_validos` deja fuera los montos negativos y los viajes fuera del mes de su archivo (29,877,234 viajes de 2026 quedan) y agrega mes, hora, dia de la semana, duracion y la marca `medible`.
+- **Decision:** Las consultas de analisis leen `viajes_validos`. Un anio nuevo en `data/raw` entra en las vistas sin tocar ninguna consulta.
 
 ```sql
 -- 00_vistas.sql
@@ -71,6 +71,33 @@ select 'green' as tipo,
        * rename (lpep_pickup_datetime as pickup_datetime,
                  lpep_dropoff_datetime as dropoff_datetime)
 from green;
+
+-- Viajes validos para el analisis, con las decisiones del cuaderno 02.
+-- Quedan fuera los montos negativos (reversiones de cobro del proveedor 2) y
+-- los viajes cuya fecha de inicio no cae en el mes de su archivo (244 en 2026,
+-- 21 de ellos con fechas de 2001 a 2009). Los demas problemas no se borran:
+-- se filtran solo en el analisis al que afectan, con la columna medible.
+--
+-- medible: el viaje sirve para duracion, distancia y velocidad. No lo es si
+-- es del proveedor 7 (no registra la hora de llegada), si la duracion no es
+-- positiva o pasa de 24 horas, o si la distancia es cero o pasa de 100 millas.
+create or replace view viajes_validos as
+select
+    *,
+    year(pickup_datetime) as anio,
+    month(pickup_datetime) as mes,
+    hour(pickup_datetime) as hora,
+    isodow(pickup_datetime) as dia_semana,  -- 1 lunes, 7 domingo
+    date_diff('second', pickup_datetime, dropoff_datetime) / 60.0 as duracion_min,
+    (VendorID <> 7
+     and dropoff_datetime > pickup_datetime
+     and dropoff_datetime - pickup_datetime <= interval 24 hours
+     and trip_distance > 0
+     and trip_distance <= 100) as medible
+from viajes
+where fare_amount >= 0
+  and total_amount >= 0
+  and strftime(pickup_datetime, '%Y-%m') = regexp_extract(filename, '(\d{4}-\d{2})\.parquet$', 1);
 
 -- Tabla de zonas de la TLC (265 zonas) para traducir PULocationID y
 -- DOLocationID a barrio y zona.
@@ -526,4 +553,499 @@ where tpep_pickup_datetime >= timestamp '2026-08-01';
 -- Fuente: data/raw/yellow/*/*.parquet, directo.
 select max(columns(*))
 from read_parquet('data/raw/yellow/*/*.parquet', union_by_name = true);
+```
+
+## Ejercicio 4: analisis exploratorio
+
+### `03_viajes_por_mes.sql`
+
+- **Objetivo:** viajes por mes y por dia de cada tipo de taxi (pregunta 1). Se divide entre los dias del mes porque febrero tiene 28 y los demas 30 o 31.
+- **Fuente:** vista viajes_validos (sql/00_vistas.sql) sobre data/raw.
+- **Resultado:** Amarillos: 118,867 viajes por dia en enero, maximo de 131,482 en mayo y 107,167 en agosto. Verdes: 1,295 en enero, 1,469 en abril y 1,307 en agosto.
+- **Decision:** Comparar meses por dia y con indice base enero. Agrupa por `mes` sin `anio`: al agregar otro anio hay que sumar `anio` a la agrupacion.
+
+```sql
+-- 03_viajes_por_mes.sql
+-- Objetivo: viajes por mes y por dia de cada tipo de taxi (pregunta 1). Se
+-- divide entre los dias del mes porque febrero tiene 28 y los demas 30 o 31.
+-- Fuente: vista viajes_validos (sql/00_vistas.sql) sobre data/raw.
+select
+    tipo,
+    mes,
+    count(*) as viajes,
+    any_value(day(last_day(pickup_datetime))) as dias,
+    count(*) / any_value(day(last_day(pickup_datetime))) as viajes_por_dia
+from viajes_validos
+group by tipo, mes
+order by tipo desc, mes;
+```
+
+### `03_hora_dia.sql`
+
+- **Objetivo:** viajes promedio por hora en cada dia de la semana, por tipo de taxi (pregunta 2). Se divide entre cuantas veces aparece cada dia de la semana en el periodo, porque de enero a agosto de 2026 algunos dias se repiten 35 veces y otros 34.
+- **Fuente:** vista viajes_validos sobre data/raw.
+- **Resultado:** Hora mas fuerte: amarillos jueves 18:00 (10,000 viajes por hora), verdes jueves 17:00 (133). Fin de semana contra dia habil: amarillos -1.0%, verdes -24.0%.
+- **Decision:** Tratar a los verdes como servicio de dias habiles al comparar con los amarillos.
+
+```sql
+-- 03_hora_dia.sql
+-- Objetivo: viajes promedio por hora en cada dia de la semana, por tipo de
+-- taxi (pregunta 2). Se divide entre cuantas veces aparece cada dia de la
+-- semana en el periodo, porque de enero a agosto de 2026 algunos dias se
+-- repiten 35 veces y otros 34.
+-- Fuente: vista viajes_validos sobre data/raw.
+with conteo as (
+    select tipo, dia_semana, hora, count(*) as viajes
+    from viajes_validos
+    group by tipo, dia_semana, hora
+),
+dias as (
+    select tipo, dia_semana, count(distinct cast(pickup_datetime as date)) as dias
+    from viajes_validos
+    group by tipo, dia_semana
+)
+select
+    conteo.tipo,
+    conteo.dia_semana,
+    conteo.hora,
+    conteo.viajes,
+    dias.dias,
+    conteo.viajes / dias.dias as viajes_por_hora
+from conteo
+join dias using (tipo, dia_semana)
+order by conteo.tipo desc, conteo.dia_semana, conteo.hora;
+```
+
+### `03_caracteristicas.sql`
+
+- **Objetivo:** distribucion de distancia, duracion y velocidad de los viajes de cada tipo (pregunta 3), con percentiles exactos.
+- **Fuente:** vista viajes_validos, solo viajes medibles (sin proveedor 7, con duracion entre 0 y 24 horas y distancia entre 0 y 100 millas).
+- **Resultado:** Medianas: amarillos 1.93 millas, 14.1 min, 9.3 mph; verdes 2.15 millas, 13.4 min, 10.0 mph. El 1% mas largo de los amarillos pasa de 19.6 millas y 72 minutos.
+- **Decision:** Usar medianas y percentiles, no promedios, para estas tres variables.
+
+```sql
+-- 03_caracteristicas.sql
+-- Objetivo: distribucion de distancia, duracion y velocidad de los viajes de
+-- cada tipo (pregunta 3), con percentiles exactos.
+-- Fuente: vista viajes_validos, solo viajes medibles (sin proveedor 7, con
+-- duracion entre 0 y 24 horas y distancia entre 0 y 100 millas).
+with medibles as (
+    select
+        tipo,
+        trip_distance as distancia_millas,
+        duracion_min,
+        trip_distance / (duracion_min / 60) as velocidad_mph
+    from viajes_validos
+    where medible
+),
+largo as (
+    unpivot medibles
+    on distancia_millas, duracion_min, velocidad_mph
+    into name variable value valor
+)
+select
+    variable,
+    tipo,
+    count(*) as viajes,
+    quantile_cont(valor, 0.10) as p10,
+    quantile_cont(valor, 0.25) as p25,
+    quantile_cont(valor, 0.50) as mediana,
+    quantile_cont(valor, 0.75) as p75,
+    quantile_cont(valor, 0.90) as p90,
+    quantile_cont(valor, 0.99) as p99
+from largo
+group by variable, tipo
+order by variable, tipo desc;
+```
+
+### `03_velocidad_por_hora.sql`
+
+- **Objetivo:** velocidad, duracion y distancia medianas segun la hora de salida (pregunta 3). La velocidad es la de todo el viaje: distancia del taximetro entre el tiempo con el taximetro encendido.
+- **Fuente:** vista viajes_validos, solo viajes medibles.
+- **Resultado:** Amarillos: 16.0 mph a las 5:00 y 7.9 a las 15:00; la duracion mediana solo va de 13.6 a 15.3 min y la distancia baja de 3.71 a 1.73 millas.
+- **Decision:** La hora del dia se analiza con la velocidad y la distancia, porque la duracion casi no cambia.
+
+```sql
+-- 03_velocidad_por_hora.sql
+-- Objetivo: velocidad, duracion y distancia medianas segun la hora de salida
+-- (pregunta 3). La velocidad es la de todo el viaje: distancia del taximetro
+-- entre el tiempo con el taximetro encendido.
+-- Fuente: vista viajes_validos, solo viajes medibles.
+select
+    tipo,
+    hora,
+    count(*) as viajes,
+    median(trip_distance / (duracion_min / 60)) as velocidad_mediana_mph,
+    median(duracion_min) as duracion_mediana_min,
+    median(trip_distance) as distancia_mediana_millas
+from viajes_validos
+where medible
+group by tipo, hora
+order by tipo desc, hora;
+```
+
+### `03_barrios.sql`
+
+- **Objetivo:** en que barrio empiezan los viajes de cada tipo de taxi (pregunta 4).
+- **Fuente:** vista viajes_validos unida con la vista zonas (taxi_zone_lookup.csv) por PULocationID. Las zonas 264 y 265 aparecen como Unknown y N/A.
+- **Resultado:** Salen de Manhattan 86.6% de los amarillos y 58.3% de los verdes; de Brooklyn 3.6% y 15.7%.
+- **Decision:** Comparar amarillos y verdes siempre por separado: atienden zonas distintas.
+
+```sql
+-- 03_barrios.sql
+-- Objetivo: en que barrio empiezan los viajes de cada tipo de taxi (pregunta 4).
+-- Fuente: vista viajes_validos unida con la vista zonas (taxi_zone_lookup.csv)
+-- por PULocationID. Las zonas 264 y 265 aparecen como Unknown y N/A.
+select
+    v.tipo,
+    coalesce(z.Borough, 'sin zona') as barrio,
+    count(*) as viajes,
+    100.0 * count(*) / sum(count(*)) over (partition by v.tipo) as pct_del_tipo
+from viajes_validos v
+left join zonas z on v.PULocationID = z.LocationID
+group by v.tipo, barrio
+order by v.tipo desc, viajes desc;
+```
+
+### `03_zonas_principales.sql`
+
+- **Objetivo:** las ocho zonas donde mas viajes empiezan, por tipo de taxi (pregunta 4).
+- **Fuente:** vista viajes_validos unida con la vista zonas por PULocationID.
+- **Resultado:** Amarillos: ninguna zona pasa de 4.4%; JFK tiene 3.9%. Verdes: East Harlem North y South suman 39.1%.
+- **Decision:** Ningun ajuste: confirma la diferencia geografica entre servicios.
+
+```sql
+-- 03_zonas_principales.sql
+-- Objetivo: las ocho zonas donde mas viajes empiezan, por tipo de taxi
+-- (pregunta 4).
+-- Fuente: vista viajes_validos unida con la vista zonas por PULocationID.
+with conteo as (
+    select v.tipo, z.Zone as zona, z.Borough as barrio, count(*) as viajes
+    from viajes_validos v
+    left join zonas z on v.PULocationID = z.LocationID
+    group by v.tipo, zona, barrio
+)
+select
+    tipo,
+    zona,
+    barrio,
+    viajes,
+    100.0 * viajes / sum(viajes) over (partition by tipo) as pct_del_tipo
+from conteo
+qualify row_number() over (partition by tipo order by viajes desc) <= 8
+order by tipo desc, viajes desc;
+```
+
+### `03_pago_por_mes.sql`
+
+- **Objetivo:** como pagan los pasajeros de cada tipo de taxi, mes por mes (pregunta 5).
+- **Fuente:** vista viajes_validos. payment_type segun el diccionario de la TLC: 0 Flex Fare (en verdes llega nulo), 1 tarjeta, 2 efectivo; 3 sin cargo, 4 disputa, 5 desconocido y 6 anulado se agrupan en "otro".
+- **Resultado:** Tarjeta 61% a 69% en amarillos y 64% a 67% en verdes; efectivo 7.9% a 9.8% contra 18.3% a 20.7%; Flex Fare amarillo de 21.0% a 30.3%.
+- **Decision:** Agrupa por `mes` sin `anio`: al agregar otro anio hay que sumar `anio` a la agrupacion.
+
+```sql
+-- 03_pago_por_mes.sql
+-- Objetivo: como pagan los pasajeros de cada tipo de taxi, mes por mes
+-- (pregunta 5).
+-- Fuente: vista viajes_validos. payment_type segun el diccionario de la TLC:
+-- 0 Flex Fare (en verdes llega nulo), 1 tarjeta, 2 efectivo; 3 sin cargo,
+-- 4 disputa, 5 desconocido y 6 anulado se agrupan en "otro".
+select
+    tipo,
+    mes,
+    case
+        when payment_type = 1 then 'tarjeta'
+        when payment_type = 2 then 'efectivo'
+        when payment_type = 0 or payment_type is null then 'flex fare'
+        else 'otro'
+    end as pago,
+    count(*) as viajes,
+    100.0 * count(*) / sum(count(*)) over (partition by tipo, mes) as pct_del_mes
+from viajes_validos
+group by tipo, mes, pago
+order by tipo desc, mes, pago;
+```
+
+### `03_propina.sql`
+
+- **Objetivo:** que parte de los viajes deja propina y de cuanto, segun la forma de pago (pregunta 5).
+- **Fuente:** vista viajes_validos. El diccionario de la TLC aclara que tip_amount solo registra propinas con tarjeta; las de efectivo no quedan. La propina como porcentaje de la tarifa se calcula solo con tarifa positiva.
+- **Resultado:** Con tarjeta deja propina 91.1% de los amarillos (mediana 3.51 dolares, 27.3% de la tarifa) y 90.4% de los verdes. En efectivo, 0.01%.
+- **Decision:** Cualquier analisis de propina se limita a pagos con tarjeta.
+
+```sql
+-- 03_propina.sql
+-- Objetivo: que parte de los viajes deja propina y de cuanto, segun la forma
+-- de pago (pregunta 5).
+-- Fuente: vista viajes_validos. El diccionario de la TLC aclara que
+-- tip_amount solo registra propinas con tarjeta; las de efectivo no quedan.
+-- La propina como porcentaje de la tarifa se calcula solo con tarifa positiva.
+select
+    tipo,
+    case
+        when payment_type = 1 then 'tarjeta'
+        when payment_type = 2 then 'efectivo'
+        when payment_type = 0 or payment_type is null then 'flex fare'
+        else 'otro'
+    end as pago,
+    count(*) as viajes,
+    100.0 * count_if(tip_amount > 0) / count(*) as pct_con_propina,
+    median(tip_amount) filter (where tip_amount > 0) as propina_mediana,
+    median(100 * tip_amount / fare_amount) filter (where tip_amount > 0 and fare_amount > 0)
+        as propina_pct_tarifa_mediana
+from viajes_validos
+group by tipo, pago
+order by tipo desc, viajes desc;
+```
+
+### `03_total_histograma.sql`
+
+- **Objetivo:** distribucion del total pagado por viaje, en intervalos de 2 dolares hasta 150 (pregunta 6). Lo que pasa de 150 se junta en el ultimo intervalo para que la cola no aplaste el resto de la grafica.
+- **Fuente:** vista viajes_validos.
+- **Resultado:** El intervalo mas comun es 16 a 18 dolares (9.0% amarillos, 10.8% verdes); cola larga con un pico de amarillos entre 100 y 102 dolares.
+- **Decision:** Revisar el pico con 03_pico_100_dolares.sql.
+
+```sql
+-- 03_total_histograma.sql
+-- Objetivo: distribucion del total pagado por viaje, en intervalos de 2
+-- dolares hasta 150 (pregunta 6). Lo que pasa de 150 se junta en el ultimo
+-- intervalo para que la cola no aplaste el resto de la grafica.
+-- Fuente: vista viajes_validos.
+select
+    tipo,
+    least(floor(total_amount / 2) * 2, 150) as desde_dolares,
+    count(*) as viajes,
+    100.0 * count(*) / sum(count(*)) over (partition by tipo) as pct_del_tipo
+from viajes_validos
+group by tipo, desde_dolares
+order by tipo desc, desde_dolares;
+```
+
+### `03_pico_100_dolares.sql`
+
+- **Objetivo:** que viajes forman el pequeno pico de la distribucion del total entre 100 y 102 dolares en los amarillos (pregunta 6).
+- **Fuente:** vista viajes_validos. RatecodeID 2 es la tarifa fija de JFK.
+- **Resultado:** 83.3% de los viajes del pico tienen tarifa fija de JFK: 70 de tarifa, 7.46 de peajes y 16.44 de propina, total mediano 100.65.
+- **Decision:** El pico es la tarifa fija de JFK, no un error.
+
+```sql
+-- 03_pico_100_dolares.sql
+-- Objetivo: que viajes forman el pequeno pico de la distribucion del total
+-- entre 100 y 102 dolares en los amarillos (pregunta 6).
+-- Fuente: vista viajes_validos. RatecodeID 2 es la tarifa fija de JFK.
+select
+    RatecodeID,
+    count(*) as viajes,
+    100.0 * count(*) / sum(count(*)) over () as pct_del_pico,
+    median(fare_amount) as tarifa_mediana,
+    median(tolls_amount) as peajes_mediana,
+    median(tip_amount) as propina_mediana,
+    median(total_amount) as total_mediano
+from viajes_validos
+where tipo = 'yellow'
+  and total_amount >= 100
+  and total_amount < 102
+group by RatecodeID
+order by viajes desc;
+```
+
+### `03_composicion.sql`
+
+- **Objetivo:** de que se compone el total pagado en promedio, por tipo de taxi (pregunta 6).
+- **Fuente:** vista viajes_validos, solo viajes cuyo total coincide con la suma de sus componentes (diferencia de un centavo o menos). En los demas el desglose no es confiable (ver 03_total_no_cuadra.sql).
+- **Resultado:** Total promedio 30.19 dolares en amarillos y 25.11 en verdes; la tarifa es 69% y 75% del total; congestion y zona central suman 2.63 dolares en amarillos y 0.90 en verdes.
+- **Decision:** El desglose solo se reporta para viajes donde cuadra, y se aclara que es sobre todo el proveedor 2.
+
+```sql
+-- 03_composicion.sql
+-- Objetivo: de que se compone el total pagado en promedio, por tipo de taxi
+-- (pregunta 6).
+-- Fuente: vista viajes_validos, solo viajes cuyo total coincide con la suma de
+-- sus componentes (diferencia de un centavo o menos). En los demas el desglose
+-- no es confiable (ver 03_total_no_cuadra.sql).
+with v as (
+    select
+        *,
+        fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge
+            + coalesce(congestion_surcharge, 0) + coalesce(Airport_fee, 0)
+            + cbd_congestion_fee + coalesce(ehail_fee, 0) as suma_componentes
+    from viajes_validos
+)
+select
+    tipo,
+    count(*) as viajes,
+    avg(fare_amount) as tarifa,
+    avg(tip_amount) as propina,
+    avg(coalesce(congestion_surcharge, 0)) as recargo_congestion,
+    avg(cbd_congestion_fee) as cargo_zona_central,
+    avg(coalesce(Airport_fee, 0)) as cargo_aeropuerto,
+    avg(tolls_amount) as peajes,
+    avg(extra) as extras,
+    avg(mta_tax + improvement_surcharge) as impuesto_y_mejora,
+    avg(total_amount) as total
+from v
+where abs(total_amount - suma_componentes) <= 0.01
+group by tipo
+order by tipo desc;
+```
+
+### `03_inconsistencias.sql`
+
+- **Objetivo:** registros que contradicen una regla entre columnas (pregunta 7).
+- **Fuente:** vista viajes_validos. Reglas: total distinto de la suma de componentes (mas de un centavo); cargo de aeropuerto sin salir de JFK (zona 132) ni LaGuardia (138), que segun el diccionario es el unico caso en que se cobra; velocidad promedio mayor a 80 mph en un viaje medible; propina registrada en un viaje pagado en efectivo, que el diccionario dice que no se registra.
+- **Resultado:** Total distinto de la suma: 10,895,265 amarillos (36.9%) y 66,968 verdes (19.9%). Cargo de aeropuerto fuera del aeropuerto: 56,287. Mas de 80 mph: 7,210 y 1,087. Efectivo con propina: 182.
+- **Decision:** Investigar el total que no cuadra por proveedor (03_total_no_cuadra.sql).
+
+```sql
+-- 03_inconsistencias.sql
+-- Objetivo: registros que contradicen una regla entre columnas (pregunta 7).
+-- Fuente: vista viajes_validos. Reglas:
+--   total distinto de la suma de componentes (mas de un centavo);
+--   cargo de aeropuerto sin salir de JFK (zona 132) ni LaGuardia (138), que
+--   segun el diccionario es el unico caso en que se cobra;
+--   velocidad promedio mayor a 80 mph en un viaje medible;
+--   propina registrada en un viaje pagado en efectivo, que el diccionario
+--   dice que no se registra.
+select
+    tipo,
+    count(*) as viajes,
+    count_if(abs(total_amount - (fare_amount + extra + mta_tax + tip_amount + tolls_amount
+        + improvement_surcharge + coalesce(congestion_surcharge, 0) + coalesce(Airport_fee, 0)
+        + cbd_congestion_fee + coalesce(ehail_fee, 0))) > 0.01) as total_no_cuadra,
+    count_if(Airport_fee > 0) as con_cargo_aeropuerto,
+    count_if(Airport_fee > 0 and PULocationID not in (132, 138)) as cargo_aeropuerto_fuera,
+    count_if(medible) as medibles,
+    count_if(medible and trip_distance / (duracion_min / 60) > 80) as mas_de_80_mph,
+    count_if(payment_type = 2) as en_efectivo,
+    count_if(payment_type = 2 and tip_amount > 0) as efectivo_con_propina
+from viajes_validos
+group by tipo
+order by tipo desc;
+```
+
+### `03_total_no_cuadra.sql`
+
+- **Objetivo:** en cuantos viajes el total no es la suma de sus componentes y de quien vienen (pregunta 7). Componentes: tarifa, extras, impuesto MTA, propina, peajes, recargo de mejora, recargo de congestion, cargo de aeropuerto, cargo de la zona central y ehail_fee.
+- **Fuente:** vista viajes_validos.
+- **Resultado:** Proveedor 2 sin Flex Fare: no cuadra 0.13% (amarillos) y 0.04% (verdes). Proveedor 1: 83.4%, con diferencia mediana de -3.25. Flex Fare: 88% a 98%. Proveedor 6: 100%.
+- **Decision:** Usar `total_amount` tal como viene; el desglose solo donde cuadra.
+
+```sql
+-- 03_total_no_cuadra.sql
+-- Objetivo: en cuantos viajes el total no es la suma de sus componentes y de
+-- quien vienen (pregunta 7). Componentes: tarifa, extras, impuesto MTA,
+-- propina, peajes, recargo de mejora, recargo de congestion, cargo de
+-- aeropuerto, cargo de la zona central y ehail_fee.
+-- Fuente: vista viajes_validos.
+with v as (
+    select
+        tipo,
+        VendorID,
+        payment_type = 0 or payment_type is null as flex_fare,
+        total_amount - (fare_amount + extra + mta_tax + tip_amount + tolls_amount
+            + improvement_surcharge + coalesce(congestion_surcharge, 0)
+            + coalesce(Airport_fee, 0) + cbd_congestion_fee + coalesce(ehail_fee, 0)) as diferencia
+    from viajes_validos
+)
+select
+    tipo,
+    VendorID,
+    flex_fare,
+    count(*) as viajes,
+    count_if(abs(diferencia) > 0.01) as no_cuadra,
+    100.0 * count_if(abs(diferencia) > 0.01) / count(*) as pct_no_cuadra,
+    median(diferencia) filter (where abs(diferencia) > 0.01) as diferencia_mediana
+from v
+group by tipo, VendorID, flex_fare
+order by tipo desc, VendorID, flex_fare;
+```
+
+### `03_atipicos.sql`
+
+- **Objetivo:** cuantos viajes quedan por encima del limite de Tukey (tercer cuartil mas 1.5 veces el rango intercuartil) en total, distancia y duracion, por tipo de taxi (pregunta 7).
+- **Fuente:** vista viajes_validos; distancia y duracion solo de viajes medibles.
+- **Resultado:** Sobre el limite de Tukey, amarillos: 8.5% por total (60.50 dolares), 10.9% por distancia (8.2 millas), 5.4% por duracion (42.7 min). Verdes: 6.8%, 10.2% y 7.1%.
+- **Decision:** No usar Tukey para limpiar: marca demasiados viajes reales (ver 03_atipicos_por_tarifa.sql).
+
+```sql
+-- 03_atipicos.sql
+-- Objetivo: cuantos viajes quedan por encima del limite de Tukey (tercer
+-- cuartil mas 1.5 veces el rango intercuartil) en total, distancia y
+-- duracion, por tipo de taxi (pregunta 7).
+-- Fuente: vista viajes_validos; distancia y duracion solo de viajes medibles.
+with largo as (
+    select tipo, 'total_dolares' as variable, total_amount as valor from viajes_validos
+    union all
+    select tipo, 'distancia_millas', trip_distance from viajes_validos where medible
+    union all
+    select tipo, 'duracion_min', duracion_min from viajes_validos where medible
+),
+limites as (
+    select
+        tipo,
+        variable,
+        quantile_cont(valor, 0.25) as q1,
+        quantile_cont(valor, 0.75) as q3
+    from largo
+    group by tipo, variable
+)
+select
+    l.variable,
+    l.tipo,
+    any_value(q1) as q1,
+    any_value(q3) as q3,
+    any_value(q3 + 1.5 * (q3 - q1)) as limite_superior,
+    count(*) as viajes,
+    count_if(l.valor > q3 + 1.5 * (q3 - q1)) as sobre_el_limite,
+    100.0 * count_if(l.valor > q3 + 1.5 * (q3 - q1)) / count(*) as pct_sobre_el_limite
+from largo l
+join limites using (tipo, variable)
+group by l.variable, l.tipo
+order by l.variable, l.tipo desc;
+```
+
+### `03_atipicos_por_tarifa.sql`
+
+- **Objetivo:** con que codigo de tarifa vienen los viajes cuyo total pasa el limite de Tukey, para saber si son errores o viajes de otra clase (pregunta 7).
+- **Fuente:** vista viajes_validos. RatecodeID segun el diccionario de la TLC: 1 estandar, 2 JFK, 3 Newark, 4 Nassau o Westchester, 5 negociada, 6 grupal, 99 desconocido; nulo en los viajes Flex Fare.
+- **Resultado:** De los amarillos sobre el limite del total: 27.2% tarifa fija de JFK, 7.3% negociada, 2.7% Newark, 2.1% Nassau o Westchester y 42.6% estandar con tarifa mediana de 49.20.
+- **Decision:** Los atipicos del total son viajes legitimos; no se eliminan.
+
+```sql
+-- 03_atipicos_por_tarifa.sql
+-- Objetivo: con que codigo de tarifa vienen los viajes cuyo total pasa el
+-- limite de Tukey, para saber si son errores o viajes de otra clase
+-- (pregunta 7).
+-- Fuente: vista viajes_validos. RatecodeID segun el diccionario de la TLC:
+-- 1 estandar, 2 JFK, 3 Newark, 4 Nassau o Westchester, 5 negociada,
+-- 6 grupal, 99 desconocido; nulo en los viajes Flex Fare.
+with limites as (
+    select
+        tipo,
+        quantile_cont(total_amount, 0.75)
+            + 1.5 * (quantile_cont(total_amount, 0.75) - quantile_cont(total_amount, 0.25)) as limite
+    from viajes_validos
+    group by tipo
+)
+select
+    v.tipo,
+    case v.RatecodeID
+        when 1 then '1 estandar'
+        when 2 then '2 JFK'
+        when 3 then '3 Newark'
+        when 4 then '4 Nassau o Westchester'
+        when 5 then '5 negociada'
+        when 6 then '6 grupal'
+        when 99 then '99 desconocido'
+        else 'sin codigo (flex fare)'
+    end as codigo_tarifa,
+    count(*) as viajes,
+    100.0 * count(*) / sum(count(*)) over (partition by v.tipo) as pct_de_los_atipicos,
+    median(v.fare_amount) as tarifa_mediana,
+    median(v.total_amount) as total_mediano
+from viajes_validos v
+join limites using (tipo)
+where v.total_amount > limites.limite
+group by v.tipo, codigo_tarifa
+order by v.tipo desc, viajes desc;
 ```

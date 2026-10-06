@@ -41,6 +41,33 @@ select 'green' as tipo,
                  lpep_dropoff_datetime as dropoff_datetime)
 from green;
 
+-- Viajes validos para el analisis, con las decisiones del cuaderno 02.
+-- Quedan fuera los montos negativos (reversiones de cobro del proveedor 2) y
+-- los viajes cuya fecha de inicio no cae en el mes de su archivo (244 en 2026,
+-- 21 de ellos con fechas de 2001 a 2009). Los demas problemas no se borran:
+-- se filtran solo en el analisis al que afectan, con la columna medible.
+--
+-- medible: el viaje sirve para duracion, distancia y velocidad. No lo es si
+-- es del proveedor 7 (no registra la hora de llegada), si la duracion no es
+-- positiva o pasa de 24 horas, o si la distancia es cero o pasa de 100 millas.
+create or replace view viajes_validos as
+select
+    *,
+    year(pickup_datetime) as anio,
+    month(pickup_datetime) as mes,
+    hour(pickup_datetime) as hora,
+    isodow(pickup_datetime) as dia_semana,  -- 1 lunes, 7 domingo
+    date_diff('second', pickup_datetime, dropoff_datetime) / 60.0 as duracion_min,
+    (VendorID <> 7
+     and dropoff_datetime > pickup_datetime
+     and dropoff_datetime - pickup_datetime <= interval 24 hours
+     and trip_distance > 0
+     and trip_distance <= 100) as medible
+from viajes
+where fare_amount >= 0
+  and total_amount >= 0
+  and strftime(pickup_datetime, '%Y-%m') = regexp_extract(filename, '(\d{4}-\d{2})\.parquet$', 1);
+
 -- Tabla de zonas de la TLC (265 zonas) para traducir PULocationID y
 -- DOLocationID a barrio y zona.
 create or replace view zonas as
