@@ -1,5 +1,8 @@
 -- 00_vistas.sql
--- Vistas sobre los archivos Parquet de data/raw.
+-- Objetivo: vistas sobre los archivos Parquet de data/raw para que las
+-- consultas de analisis no repitan rutas ni nombres distintos por tipo.
+-- Fuente: data/raw/yellow/*/*.parquet, data/raw/green/*/*.parquet y
+-- data/raw/zonas/taxi_zone_lookup.csv.
 --
 -- Una vista no copia datos: guarda la consulta, y cada vez que se usa DuckDB
 -- vuelve a leer los archivos. Por eso un mes o un anio nuevo que caiga en
