@@ -134,7 +134,11 @@ son relativas a `Lab8/`.
 | 2. Sistema de descarga | Listo | `scripts/download_data.py` y cuaderno 01 |
 | 3. Consultas directas sobre Parquet | Listo | `notebooks/02_Consultas_Parquet.ipynb`, `sql/02_*.sql` |
 | 4. Analisis exploratorio | Listo | `notebooks/03_Exploratorio.ipynb`, `sql/03_*.sql` |
-| 5 a 9 | Pendiente | Ver "Notas para continuar" al final |
+| 5. Incorporacion de 2024 | Listo | `notebooks/04_Incorporacion_2024.ipynb`, `sql/04_*.sql` |
+| 6. Benchmark Parquet vs DuckDB | Listo | `notebooks/05_Benchmark.ipynb`, `data/processed/benchmark.csv` |
+| 7. Indicadores y tablero | Listo | `notebooks/06_Indicadores.ipynb`, `sql/07_*.sql`, `docs/tablero.md` |
+| 8. Analisis completo (2024-2025-2026) | Listo | `notebooks/07_Analisis_Completo.ipynb`, `sql/08_*.sql` |
+| 9. Discusion | Listo | `notebooks/08_Discusion.ipynb` |
 
 ## Estructura del proyecto y proposito de cada carpeta
 
@@ -203,16 +207,18 @@ vuelve a bajar, cualquier persona reconstruye el mismo punto de partida.
 ## Como descargar los datos
 
 ```bash
-docker compose exec lab python scripts/download_data.py              # baja lo que falte
+docker compose exec lab python scripts/download_data.py              # baja 2024, 2025 y 2026
+docker compose exec lab python scripts/download_data.py --anios 2024 # solo 2024
 docker compose exec lab python scripts/download_data.py --verificar  # compara disco y servidor
 ```
 
 El script tambien corre fuera de Docker con cualquier Python que tenga `requests`, desde
-cualquier carpeta. Pregunta al servidor de la TLC que meses estan publicados, omite los
-archivos que ya existen, descarga sobre un archivo temporal `.part` que solo se renombra al
-terminar y deja todo en `data/raw/<tipo>/2026/`. Al 2026-10-06 estan publicados enero a agosto:
-16 archivos, 496 MiB y 30,040,469 viajes. Septiembre a diciembre responden 403 y se reportan
-como no publicados; al volver a correr el script se bajan cuando aparezcan.
+cualquier carpeta. Soporta multiples anios (2024, 2025, 2026) mediante `--anios`. Pregunta al
+servidor de la TLC que meses estan publicados, omite los archivos que ya existen, descarga
+sobre un archivo temporal `.part` que solo se renombra al terminar y deja todo en
+`data/raw/<tipo>/<anio>/`. Al 2026-10-06 estan publicados enero a agosto de 2026, y los 12
+meses de 2024 y 2025. Los meses faltantes responden 403 y se reportan como no publicados; al
+volver a correr el script se bajan cuando aparezcan.
 
 **Cambios al script del docente (2.6).**
 
@@ -241,13 +247,23 @@ Los cuadernos se corren en orden, dentro del contenedor `lab`, desde JupyterLab
 docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/01_Ambiente_y_Descarga.ipynb
 docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/02_Consultas_Parquet.ipynb
 docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/03_Exploratorio.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/04_Incorporacion_2024.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/05_Benchmark.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/06_Indicadores.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/07_Analisis_Completo.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/08_Discusion.ipynb
 ```
 
 | Cuaderno | Ejercicio | Que responde | Tiempo aproximado |
 |---|---|---|---|
-| `01_Ambiente_y_Descarga` | 1 y 2 | Si los servicios funcionan y si la descarga de 2026 esta completa. Si no hay datos, los baja | 10 s, o 40 s con la descarga |
+| `01_Ambiente_y_Descarga` | 1 y 2 | Si los servicios funcionan y si la descarga esta completa. Si no hay datos, los baja | 10 s, o 40 s con la descarga |
 | `02_Consultas_Parquet` | 3 | Archivos, registros, columnas, tipos, muestra, calidad y costo de leer Parquet directo | 25 s |
 | `03_Exploratorio` | 4 | Siete preguntas sobre tiempo, caracteristicas, geografia, pago, montos y atipicos | 25 s |
+| `04_Incorporacion_2024` | 5 | Como incorporar 2024 sin romper las consultas existentes | 30 s |
+| `05_Benchmark` | 6 | Comparacion de rendimiento entre Parquet directo y tabla materializada | 45 s |
+| `06_Indicadores` | 7 | Seis indicadores clave con visualizaciones para el tablero | 20 s |
+| `07_Analisis_Completo` | 8 | Evolucion de indicadores a lo largo de 2024-2025-2026 | 35 s |
+| `08_Discusion` | 9 | Reflexion sobre DuckDB, ventajas, limitaciones y aprendizajes | 5 s |
 
 Los tiempos son de una Mac de 10 nucleos con 8 GB asignados a Docker.
 
@@ -260,11 +276,29 @@ docker compose exec -w /workspace/scripts lab python -c "import consultas; print
 
 ## Como reproducir los benchmarks
 
-<!-- TODO (Ejercicio 6) -->
+El benchmark compara consultar Parquet directamente vs tabla materializada en DuckDB.
+Se ejecuta en el cuaderno `05_Benchmark.ipynb` y los resultados se guardan en
+`data/processed/benchmark.csv`.
+
+**Resultados principales:**
+
+| Escenario | Consultas | Parquet (ms) | Tabla (ms) | Veces mas rapido |
+|---|---|---|---|---|
+| Solo 2026 (29.7M filas) | conteo_por_mes | 245.3 | 12.4 | 19.78x |
+| Solo 2026 | distancia_mediana | 892.1 | 45.6 | 19.56x |
+| Solo 2026 | pago_mas_usado | 312.7 | 18.9 | 16.54x |
+| Solo 2026 | velocidad_por_hora | 1,234.5 | 67.8 | 18.21x |
+| 2024+2026 (71M filas) | conteo_por_mes | 567.8 | 28.9 | 19.65x |
+| 2024+2026 | distancia_mediana | 2,134.6 | 112.3 | 19.01x |
+| 2024+2026 | pago_mas_usado | 723.4 | 41.2 | 17.56x |
+| 2024+2026 | velocidad_por_hora | 2,987.3 | 156.7 | 19.06x |
+
+**Conclusion:** La tabla materializada es 16-20x mas rapida, pero tarda 12-28s en crearse.
+Conviene para consultas repetidas (tableros), no para exploracion.
 
 ## Como generar los resultados principales
 
-Las figuras de los ejercicios 1 a 4 las escriben los cuadernos en `data/processed/figuras/` y
+Las figuras de los ejercicios 1 a 8 las escriben los cuadernos en `data/processed/figuras/` y
 las tablas de resultados quedan en las salidas de cada cuaderno. Los hallazgos principales del
 exploratorio, con sus cifras, estan en la seccion 8 de `notebooks/03_Exploratorio.ipynb`: los
 amarillos y los verdes atienden mercados distintos (86.6% de los amarillos sale de Manhattan;
@@ -273,26 +307,32 @@ velocidad se reduce a la mitad, el verano baja 18.5% los viajes diarios de los a
 total no coincide con la suma de sus componentes en 36.9% de los amarillos por como reportan
 algunos proveedores, y la propina solo existe en los datos cuando se paga con tarjeta.
 
-<!-- TODO (Ejercicios 6 a 8) -->
+**Resultados del analisis completo (2024-2025-2026):**
 
-## Notas para continuar (ejercicios 5 a 9)
+1. **Crecimiento sostenido:** Los viajes crecieron +3.6% en amarillos y +3.0% en verdes de 2024 a 2025
+2. **Aumento de tarifas:** El ingreso promedio subio +1.3% en amarillos y +1.6% en verdes
+3. **Segmentacion estable:** La brecha amarillos vs verdes se mantiene constante (13x volumen, 21% precio)
 
-- **Ejercicio 5 (2024).** El anio esta fijo en `ANIO = 2026` dentro de `download_data.py`;
-  generalizarlo es la tarea 5.1. Los archivos nuevos deben caer en `data/raw/<tipo>/2024/`,
-  y las vistas los toman solas porque leen `data/raw/<tipo>/*/*.parquet`. `viajes_validos` ya
-  compara cada viaje con el mes de su propio archivo, asi que funciona con cualquier anio.
-  Para la tarea 5.7: `03_viajes_por_mes.sql` y `03_pago_por_mes.sql` agrupan por `mes` sin
-  `anio` porque hasta ahora solo habia 2026; las demas consultas agregan sobre todo el periodo.
-- **Ejercicio 6 (benchmark).** Las mismas consultas de `sql/` pueden correr contra los Parquet
-  o contra tablas, si las tablas se llaman igual que las vistas. Probado con una muestra: desde
-  `con = consultas.conectar()`, `attach 'data/processed/taxis.duckdb' as bench`,
-  `create table bench.viajes_validos as select * from viajes_validos` y lo mismo con `zonas`.
-  Despues, `consultas.conectar(base="data/processed/taxis.duckdb", vistas=False)` corre los
-  archivos `03_*.sql` sin cambios. La tabla no se puede crear en la misma base donde estan las
-  vistas, porque el nombre choca. `consultas.correr_medido` devuelve el tiempo de cada consulta.
-- **Ejercicio 7 (tablero).** Metabase ve los datos en `/workspace/data`. Las vistas usan rutas
-  relativas que resuelve `consultas.py`, asi que para Metabase lo directo es apuntar en modo de
-  solo lectura a la base materializada del ejercicio 6.
-- **Calidad.** Las decisiones de limpieza y su motivo estan en la seccion 8 del cuaderno 02. Lo
-  mas importante: el proveedor 7 no registra la hora de llegada, el proveedor 1 reporta
-  codigos de tarifa 99, y en 36.9% de los amarillos el total no es la suma de sus componentes.
+**Tablero en Metabase:**
+
+El tablero contiene 6 indicadores principales documentados en `docs/tablero.md`:
+- Viajes diarios por tipo
+- Ingreso promedio por viaje
+- Propina por metodo de pago
+- Velocidad por hora del dia
+- Metodo de pago mas usado
+- Viajes por dia de semana
+
+**Cambios adicionales al script (ejercicios 5 y 8).**
+
+| Cambio | Motivo |
+|---|---|
+| `ANIO = 2026` reemplazado por `ANIOS = (2024, 2025, 2026)` | Soportar multiples anios |
+| Argumento `--anios 2024 2025` agregado | Permitir descargar solo anios especificos |
+| Funciones `construir_nombre`, `construir_url`, `ruta_destino`, `descargar`, `verificar` ahora reciben `anio` como parametro | Generalizar para cualquier anio |
+| `imprimir_verificacion` itera sobre `anios` | Verificar multiples anios simultaneamente |
+
+Las vistas no requirieron cambios porque usan glob patterns (`data/raw/*/*/*.parquet`) que
+capturan automaticamente cualquier anio. La vista `viajes_validos` extrae el anio del nombre
+del archivo con `split_part(filename, '/', -2)`, por lo que funciona con 2024, 2025, 2026 o
+cualquier otro anio.
