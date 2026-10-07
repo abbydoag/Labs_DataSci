@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Descarga los archivos Parquet de 2026 del NYC TLC Trip Record Data.
+"""Descarga los archivos Parquet del NYC TLC Trip Record Data.
 
-Descarga los registros de viajes de taxis amarillos (yellow) y verdes (green)
-correspondientes al anio 2026, que es el conjunto de datos inicial del
-laboratorio. Este script solo contempla el anio 2026.
+Soporta multiples anios (2024, 2025 y 2026). Cada archivo existente se omite;
+solo se descargan los que faltan.
 
 Fuente oficial de los datos:
     https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
 
 Uso:
-    python scripts/download_data.py                 # amarillos y verdes
+    python scripts/download_data.py                    # anios por defecto (2024, 2025, 2026)
+    python scripts/download_data.py --anios 2024       # solo 2024
+    python scripts/download_data.py --anios 2024 2025  # 2024 y 2025
     python scripts/download_data.py --taxi yellow
     python scripts/download_data.py --taxi green
-    python scripts/download_data.py --verificar     # solo revisa, no descarga
+    python scripts/download_data.py --verificar        # solo revisa, no descarga
 
 Los archivos se guardan en:
     data/raw/<tipo>/<anio>/<nombre-original>.parquet
@@ -20,8 +21,8 @@ Los archivos se guardan en:
 
 Comportamiento:
   - La TLC publica cada mes con varias semanas de atraso, por lo que no todos
-    los meses de 2026 existen todavia. El script consulta al servidor que
-    meses estan publicados en lugar de suponerlos.
+    los meses existen todavia. El script consulta al servidor que meses estan
+    publicados en lugar de suponerlos.
   - Un archivo que ya existe localmente no se vuelve a descargar.
   - La descarga se hace sobre un nombre temporal y solo se renombra al
     terminar, de modo que una interrupcion no deja archivos .parquet a medias.
@@ -36,7 +37,7 @@ from pathlib import Path
 
 import requests
 
-ANIO = 2026
+ANIOS = (2024, 2025, 2026)
 TIPOS_TAXI = ("yellow", "green")
 URL_BASE = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 
@@ -59,19 +60,19 @@ BLOQUE = 1024 * 1024        # 1 MiB por bloque de descarga
 SUFIJO_TEMPORAL = ".part"
 
 
-def construir_nombre(tipo: str, mes: int) -> str:
+def construir_nombre(tipo: str, anio: int, mes: int) -> str:
     """Nombre del archivo publicado por la TLC, p. ej. yellow_tripdata_2026-01.parquet."""
-    return f"{tipo}_tripdata_{ANIO}-{mes:02d}.parquet"
+    return f"{tipo}_tripdata_{anio}-{mes:02d}.parquet"
 
 
-def construir_url(tipo: str, mes: int) -> str:
+def construir_url(tipo: str, anio: int, mes: int) -> str:
     """URL completa del archivo Parquet mensual."""
-    return f"{URL_BASE}/{construir_nombre(tipo, mes)}"
+    return f"{URL_BASE}/{construir_nombre(tipo, anio, mes)}"
 
 
-def ruta_destino(tipo: str, mes: int) -> Path:
+def ruta_destino(tipo: str, anio: int, mes: int) -> Path:
     """Ruta local donde se guarda el archivo."""
-    return DIR_DESTINO / tipo / str(ANIO) / construir_nombre(tipo, mes)
+    return DIR_DESTINO / tipo / str(anio) / construir_nombre(tipo, anio, mes)
 
 
 def tamanio_publicado(url: str) -> int | None:
@@ -133,21 +134,21 @@ def descargar_archivo(url: str, destino: Path, esperado: int = 0) -> int:
     raise requests.RequestException(f"no se pudo descargar {url}: {ultimo_error}")
 
 
-def descargar(tipo: str) -> dict:
-    """Descarga todos los meses publicados de un tipo de taxi para 2026."""
-    print(f"\n=== {tipo.upper()} {ANIO} ===")
+def descargar(tipo: str, anio: int) -> dict:
+    """Descarga todos los meses publicados de un tipo de taxi para un anio."""
+    print(f"\n=== {tipo.upper()} {anio} ===")
     resumen = {"descargados": 0, "omitidos": 0, "no_publicados": [], "fallidos": []}
 
     for mes in range(1, 13):
-        etiqueta = f"{ANIO}-{mes:02d}"
-        destino = ruta_destino(tipo, mes)
+        etiqueta = f"{anio}-{mes:02d}"
+        destino = ruta_destino(tipo, anio, mes)
 
         if destino.exists() and destino.stat().st_size > 0:
             print(f"  {etiqueta}  ya existe, se omite")
             resumen["omitidos"] += 1
             continue
 
-        url = construir_url(tipo, mes)
+        url = construir_url(tipo, anio, mes)
         try:
             esperado = tamanio_publicado(url)
         except requests.RequestException as error:
@@ -180,7 +181,7 @@ def descargar_zonas() -> str:
     return f"lista ({formato_tamanio(escritos)}) -> {RUTA_ZONAS}"
 
 
-def verificar(tipo: str) -> list[dict]:
+def verificar(tipo: str, anio: int) -> list[dict]:
     """Compara, mes a mes, lo que publica la TLC con lo que hay en disco.
 
     Estados:
@@ -191,9 +192,9 @@ def verificar(tipo: str) -> list[dict]:
     """
     filas = []
     for mes in range(1, 13):
-        destino = ruta_destino(tipo, mes)
+        destino = ruta_destino(tipo, anio, mes)
         local = destino.stat().st_size if destino.exists() else 0
-        remoto = tamanio_publicado(construir_url(tipo, mes))
+        remoto = tamanio_publicado(construir_url(tipo, anio, mes))
         if remoto is None:
             estado = "no publicado"
         elif local == 0:
@@ -203,33 +204,38 @@ def verificar(tipo: str) -> list[dict]:
         else:
             estado = "incompleto"
         filas.append({
-            "tipo": tipo, "anio": ANIO, "mes": mes, "archivo": destino.name,
+            "tipo": tipo, "anio": anio, "mes": mes, "archivo": destino.name,
             "bytes_servidor": remoto or 0, "bytes_local": local, "estado": estado,
         })
     return filas
 
 
-def imprimir_verificacion(tipos: tuple) -> int:
+def imprimir_verificacion(tipos: tuple, anios: tuple) -> int:
     """Imprime la verificacion y devuelve 1 si falta algun mes publicado."""
     pendientes = 0
     print(f"{'archivo':<34} {'servidor':>12} {'local':>12}  estado")
-    for tipo in tipos:
-        for fila in verificar(tipo):
-            print(f"{fila['archivo']:<34} {fila['bytes_servidor']:>12,} "
-                  f"{fila['bytes_local']:>12,}  {fila['estado']}")
-            if fila["estado"] in ("falta", "incompleto"):
-                pendientes += 1
+    for anio in anios:
+        for tipo in tipos:
+            for fila in verificar(tipo, anio):
+                print(f"{fila['archivo']:<34} {fila['bytes_servidor']:>12,} "
+                      f"{fila['bytes_local']:>12,}  {fila['estado']}")
+                if fila["estado"] in ("falta", "incompleto"):
+                    pendientes += 1
     print(f"\nmeses publicados sin archivo completo en disco: {pendientes}")
     return 1 if pendientes else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=f"Descarga los datos de taxis de {ANIO} del NYC TLC."
+        description="Descarga los datos de taxis del NYC TLC."
     )
     parser.add_argument(
         "--taxi", choices=(*TIPOS_TAXI, "all"), default="all",
         help="tipo de taxi a descargar (por defecto: all)",
+    )
+    parser.add_argument(
+        "--anios", type=int, nargs="+", default=list(ANIOS),
+        help="anios a descargar (por defecto: 2024 2025 2026)",
     )
     parser.add_argument(
         "--verificar", action="store_true",
@@ -238,17 +244,21 @@ def main() -> int:
     argumentos = parser.parse_args()
 
     tipos = TIPOS_TAXI if argumentos.taxi == "all" else (argumentos.taxi,)
+    anios = tuple(argumentos.anios)
 
     if argumentos.verificar:
-        return imprimir_verificacion(tipos)
+        return imprimir_verificacion(tipos, anios)
 
     total = {"descargados": 0, "omitidos": 0, "no_publicados": [], "fallidos": []}
-    for tipo in tipos:
-        resumen = descargar(tipo)
-        total["descargados"] += resumen["descargados"]
-        total["omitidos"] += resumen["omitidos"]
-        total["no_publicados"] += [f"{tipo} {m}" for m in resumen["no_publicados"]]
-        total["fallidos"] += [f"{tipo} {m}" for m in resumen["fallidos"]]
+    for anio in anios:
+        for tipo in tipos:
+            resumen = descargar(tipo, anio)
+            total["descargados"] += resumen["descargados"]
+            total["omitidos"] += resumen["omitidos"]
+            total["no_publicados"] += [f"{tipo} {anio}-{m:02d}" for m in range(1, 13)
+                                       if f"{tipo} {anio}-{m:02d}" in resumen["no_publicados"]]
+            total["fallidos"] += [f"{tipo} {anio}-{m:02d}" for m in range(1, 13)
+                                  if f"{tipo} {anio}-{m:02d}" in resumen["fallidos"]]
 
     try:
         print(f"\nTabla de zonas: {descargar_zonas()}")
