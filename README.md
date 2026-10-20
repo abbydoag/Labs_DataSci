@@ -5,7 +5,11 @@ Guatemala (INGUAT). Laboratorio 3 sobre reconocimiento de imagenes del alfabeto
 de Lenguaje de Senas Americano (ASL). Laboratorio 4 sobre analisis geoespacial
 de la cianobacteria en los lagos de Atitlan y Amatitlan con imagenes Sentinel-2.
 Laboratorio 5 sobre mineria de textos y analisis de sentimiento aplicados a la
-clasificacion de tweets que se refieren o no a un desastre real.
+clasificacion de tweets que se refieren o no a un desastre real. Laboratorio 6
+sobre analisis de redes sociales en YouTube. Laboratorio 7 sobre prediccion de
+salarios con Spark MLlib. Laboratorio 8 sobre analisis de viajes de taxis NYC
+con DuckDB y Docker. Laboratorio 9 sobre visualizacion estatica aplicada al
+Lab 1.
 
 ## Estructura del proyecto
 
@@ -67,6 +71,53 @@ clasificacion de tweets que se refieren o no a un desastre real.
     ├── requirements.txt        # Dependencias del laboratorio
     ├── data/                   # train.csv y test.csv de Kaggle
     └── processed/              # Corpus limpio y puntuaciones de sentimiento
+    │
+├── Lab6/                       # Laboratorio 6: analisis de redes sociales en YouTube
+│   ├── Lab6.ipynb              # Ejercicios 1-4: carga, limpieza, exploratorio, red bipartita
+│   ├── 05_Proyecciones.ipynb  # Ejercicio 5: proyecciones autor-autor y video-video
+│   ├── 06_Topologia.ipynb      # Ejercicio 6: topologia, fragmentacion, aislamiento
+│   ├── 07_Comunidades.ipynb    # Ejercicio 7: deteccion de comunidades (Louvain)
+│   ├── 08_Centralidad.ipynb    # Ejercicio 8: centralidad, autores puente, videos articuladores
+│   ├── 09_Sentimiento.ipynb    # Ejercicio 9: analisis de sentimiento con lexico en espanol
+│   ├── 10_Conclusiones.ipynb   # Ejercicio 10: interpretacion, limitaciones, conclusiones
+│   ├── src/                    # Codigo compartido (config, datos, texto, sentimiento, redes)
+│   ├── requirements.txt        # Dependencias del laboratorio
+│   ├── youtube_videos.csv      # 293 videos con 20 variables
+│   ├── youtube_comments.csv    # 406 comentarios con 17 variables
+│   ├── processed/              # Tablas de nodos y aristas de las redes
+│   └── figuras/                # Visualizaciones generadas por los notebooks
+│
+├── Lab7/                       # Laboratorio 7: prediccion de salarios con Spark MLlib
+│   ├── 04_Segmentacion.ipynb   # KMeans sobre edad, antigüedad, horas
+│   ├── 05_Regresion_Lineal.ipynb  # Pipeline de regresion lineal
+│   ├── 06_Random_Forest.ipynb  # Pipeline de Random Forest
+│   ├── 07_Evaluacion_2026.ipynb   # Evaluacion de ambos modelos sobre 2026T1
+│   ├── 08_Analisis_Errores.ipynb  # Graficos de residuos y analisis por deciles
+│   ├── src/                    # Codigo compartido (config, datos, modelos)
+│   ├── requirements.txt        # Dependencias del laboratorio
+│   ├── Base-de-datos-Personas-ENEIC-*.xlsx  # Bases de datos ENEIC 2025-2026
+│   ├── processed/              # Parquets generados (2025 y 2026)
+│   ├── modelos/                # Modelos entrenados guardados
+│   └── figuras/                # Graficos generados
+│
+├── Lab8/                       # Laboratorio 8: analisis de taxis NYC con DuckDB
+│   ├── Dockerfile              # Imagen Python 3.11.14 + DuckDB 1.5.5
+│   ├── metabase.Dockerfile     # Imagen Metabase v0.63.19 + driver DuckDB
+│   ├── docker-compose.yml      # Servicios lab (JupyterLab) y metabase
+│   ├── notebooks/              # Cuadernos 01-08 (ambiente, consultas, exploratorio, benchmark, indicadores, analisis completo, discusion)
+│   ├── sql/                    # Consultas SQL (vistas, ejercicios 2-8)
+│   ├── scripts/                # download_data.py, consultas.py
+│   ├── docs/                   # consultas.md, tablero.md
+│   ├── data/raw/               # Datos de TLC (Parquet), no se versionan
+│   ├── data/processed/         # Figuras y benchmark, se regeneran
+│   └── requirements.txt        # Dependencias del laboratorio
+│
+└── Lab9/                       # Laboratorio 9: visualizacion estatica (infografia del Lab 1)
+    ├── pronostico.py           # Inciso 7: proyeccion visual del modelo ganador (ARIMA)
+    ├── cuadrante_comparativo.py # Inciso 5: cuadrante comparativo de series
+    ├── modelos_comparativa.py  # Inciso 6: comparativa de modelos (MAE, RMSE)
+    ├── figuras/                # Figuras PNG de los incisos 5, 6 y 7
+    └── Laboratorio 9. Visualización. 2026.pdf  # Instrucciones del laboratorio
 ```
 
 ## Laboratorio 3: datos y entorno
@@ -237,6 +288,154 @@ p = 0.689). La razon es que las palabras que aportan negatividad en este corpus
 TF-IDF ya usa como predictoras con pesos aprendidos de los datos: la negatividad
 no es informacion nueva sino una version comprimida de la que el modelo ya
 tenia.
+
+## Laboratorio 6: analisis de redes sociales en YouTube
+
+El laboratorio analiza la estructura de participacion en YouTube a partir de
+datos de videos y comentarios sobre temas guatemaltecos. Son 293 videos con 20
+variables y 406 comentarios con 17 variables. Los archivos `youtube_videos.csv`
+y `youtube_comments.csv` **si se versionan** porque son pequenos.
+
+El laboratorio trae su propio entorno virtual con Python 3.12+. Desde la
+carpeta `Lab6`:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Dependencias principales: `pandas`, `networkx`, `matplotlib`, `seaborn`, `nltk`,
+`wordcloud`, `numpy`, `scipy`.
+
+Los notebooks se corren en orden (1 a 10). `Lab6.ipynb` cubre los ejercicios 1-4
+(carga, limpieza, exploratorio, red bipartita). Los cuadernos 05-10 cubren
+proyecciones, topologia, comunidades (Louvain), centralidad, sentimiento con
+lexico en espanol y conclusiones. Cada uno importa de `src/` que contiene los
+modulos compartidos: `config.py`, `datos.py`, `texto.py`, `sentimiento.py` y
+`redes.py`.
+
+Las figuras se escriben en `Lab6/figuras/` y las tablas de nodos y aristas en
+`Lab6/processed/`, ambos versionados.
+
+## Laboratorio 7: prediccion de salarios con Spark MLlib
+
+Analisis de salarios con datos de la Encuesta Nacional de Ingresos y Gastos de
+los Hogares (ENEIC) de Guatemala. Son 40,361 registros de 2025T1-T3 para
+entrenamiento, 12,664 de 2025T4 para validacion y 2026T1 para prueba final.
+Poblacion: asalariados de 15+ anios con salario positivo.
+
+El laboratorio usa **PySpark 3.5** que requiere **Java 17**. Desde la carpeta
+`Lab7`:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17  # macOS
+```
+
+Los archivos Excel de ENEIC (`Base-de-datos-Personas-ENEIC-*.xlsx`) **si se
+versionan**. Los notebooks se corren en orden: 04 (Segmentacion con KMeans) → 05
+(Regresion Lineal) → 06 (Random Forest) → 07 (Evaluacion 2026) → 08 (Analisis
+de Errores). El inciso 4 genera `processed/eneic_2025.parquet` y
+`processed/eneic_2026.parquet` si no existen (tarda ~2 min).
+
+**Modelos entrenados:**
+
+| Modelo | RMSE validacion | R2 validacion |
+|--------|----------------|---------------|
+| Referencia (media) | 2,889 | -0.003 |
+| Regresion lineal | 2,186 | 0.426 |
+| Random Forest | 1,987 | 0.523 |
+
+Random Forest gana porque captura interacciones (educacion x categoria
+ocupacional) que el lineal no puede. Los modelos entrenados se guardan en
+`Lab7/modelos/` y las figuras en `Lab7/figuras/`, ambos versionados.
+
+## Laboratorio 8: analisis de viajes de taxis NYC con DuckDB
+
+Analisis de los datos de NYC TLC Trip Record Data (2024-2026) usando DuckDB y
+Docker. El laboratorio vive en la carpeta `Lab8/` del repositorio de
+laboratorios del equipo, no en un fork aparte. El primer commit de la carpeta
+es una copia sin cambios del repositorio base del docente (`menene/duckdb`).
+
+Requisitos: **Docker Desktop** con Docker Compose y unos **10 GB libres**. Las
+dos imagenes ocupan 1.16 GB (`lab`) y 1.83 GB (`metabase`), y los datos de
+2026 unos 500 MB.
+
+```
+cd Lab8
+docker compose up -d --build
+docker compose ps
+```
+
+La primera construccion descarga la imagen de Python, la de Java (Temurin 21),
+Metabase y el driver de DuckDB, y tarda varios minutos.
+
+| Servicio | Direccion | Que es |
+|---|---|---|
+| `lab` | http://localhost:8888 | JupyterLab, sin contrasena |
+| `metabase` | http://localhost:3000 | Metabase con driver DuckDB |
+
+Herramientas disponibles: en `lab`, Python 3.11.14, DuckDB 1.5.5, pandas 3.0.6,
+pyarrow 25.0.1, matplotlib 3.11.2, requests 2.34.2, JupyterLab 4.6.4; en
+`metabase`, Java 21, Metabase v0.63.19 y el driver de DuckDB 1.5.5.0.
+
+Los datos se descargan con `scripts/download_data.py` que consulta al servidor
+de la TLC que meses estan publicados. Los archivos se guardan en
+`data/raw/<tipo>/<anio>/` y **no se versionan**. El script tambien baja
+`taxi_zone_lookup.csv`.
+
+Los cuadernos se corren en orden dentro del contenedor `lab`, desde JupyterLab
+o desde la terminal:
+
+```
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/01_Ambiente_y_Descarga.ipynb
+docker compose exec lab jupyter nbconvert --to notebook --execute --inplace notebooks/02_Consultas_Parquet.ipynb
+# ... hasta 08_Discusion.ipynb
+```
+
+El benchmark compara consultar Parquet directamente vs tabla materializada en
+DuckDB. La tabla materializada es 16-20x mas rapida, pero tarda 12-28s en
+crearse. Conviene para consultas repetidas (tableros), no para exploracion.
+
+El tablero en Metabase contiene 6 indicadores principales: viajes diarios por
+tipo, ingreso promedio por viaje, propina por metodo de pago, velocidad por
+hora del dia, metodo de pago mas usado y viajes por dia de semana.
+
+## Laboratorio 9: visualizacion estatica
+
+Infografia de una pagina que sintetiza el Lab 1 (series de tiempo de la Base de
+Migracion 2009-2026, INGUAT/IGM) para un directivo no tecnico. Contiene el
+codigo de los incisos 5, 6 y 7 (bloques 3 y 4).
+
+El laboratorio usa el mismo entorno virtual del Lab 1. Desde la raiz del
+repositorio:
+
+```
+Lab\ 1/.venv/bin/python Lab9/pronostico.py
+```
+
+Lee `Lab 1/df/Base_Migracion_2009-2026jun.csv` y genera
+`Lab9/figuras/07_pronostico_intervalo.png`. El script `pronostico.py`
+reconstruye la serie total (turistas + excursionistas), la division 70/30 y el
+ARIMA(0,1,1) sobre log1p que gano en el Lab 1 por menor RMSE. El intervalo del
+95% se calcula con `get_forecast().conf_int()` en escala log y se regresa a
+viajeros.
+
+El script `cuadrante_comparativo.py` responde con evidencia: cual serie tiene
+mayor estacionalidad, crecimiento, volatilidad y cual fue mas golpeada por la
+pandemia. El script `modelos_comparativa.py` contrasta el desempeno de los 5
+algoritmos entrenados en el Lab 1 (ARIMA, Holt-Winters, Suavizamiento
+exponencial, Seasonal naive, Prophet) usando MAE y RMSE.
+
+Hallazgo del inciso 7: el modelo se entreno hasta marzo de 2021, en plena
+pandemia, y proyecta un nivel plano de 88,319 viajeros al mes. La serie real se
+recupero a 200-400 mil. El intervalo crece de forma exponencial al volver de la
+escala log y llega a 20.6 millones en junio de 2026, por eso el eje se corta en
+600 mil y el corte se rotula en la figura en lugar de ocultarlo.
+
+Las figuras se escriben en `Lab9/figuras/` y **si se versionan** porque la
+infografia y sus graficas son el entregable del laboratorio.
 
 ## Nota sobre los informes
 
