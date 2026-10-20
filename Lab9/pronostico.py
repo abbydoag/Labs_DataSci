@@ -29,11 +29,18 @@ ALFA = 0.05
 Y_MAX = 600_000
 INICIO_VISTA = "2018-01-01"
 
-# Paleta provisional, se ajusta a la que acuerde el equipo
-COLOR_HISTORIA = "#7F8F8B"
-COLOR_OBSERVADO = "#0E4D45"
-COLOR_ESTIMACION = "#3F8A26"
-COLOR_TEXTO = "#1E2A28"
+# Paleta de la infografia en Canva: azul para lo observado y el naranja
+# complementario como acento para la estimacion. Los tonos se oscurecen lo
+# necesario para cumplir contraste WCAG sobre el fondo del lienzo.
+COLOR_FONDO = "#EFF3FE"
+COLOR_HISTORIA = "#7B83A6"
+COLOR_OBSERVADO = "#3D63D6"
+COLOR_ESTIMACION = "#A86E17"
+COLOR_BANDA = "#EABA77"
+COLOR_NOTA = "#7A4E0C"
+COLOR_TEXTO = "#11018C"
+COLOR_SUBTITULO = "#4A5080"
+COLOR_REJILLA = "#D2D4EF"
 
 
 def cargar_serie_total():
@@ -89,12 +96,13 @@ def metricas(test, pron):
 
 def graficar(train, test, pron, m):
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 13})
-    fig, ax = plt.subplots(figsize=(12, 6), dpi=200)
+    fig, ax = plt.subplots(figsize=(12, 6), dpi=200, facecolor=COLOR_FONDO)
+    ax.set_facecolor(COLOR_FONDO)
 
     historia = train.loc[INICIO_VISTA:]
     ax.fill_between(
         pron.index, pron["inferior"], pron["superior"].clip(upper=Y_MAX),
-        color=COLOR_ESTIMACION, alpha=0.18, linewidth=0,
+        color=COLOR_BANDA, alpha=0.45, linewidth=0,
     )
     ax.plot(historia.index, historia, color=COLOR_HISTORIA, lw=1.6)
     ax.plot(test.index, test, color=COLOR_OBSERVADO, lw=2.6)
@@ -104,7 +112,7 @@ def graficar(train, test, pron, m):
     # Etiquetas directas en lugar de leyenda
     ax.text(
         historia.index[2], historia.max() * 1.06,
-        "Datos usados para entrenar", color=COLOR_HISTORIA, fontsize=12,
+        "Datos usados para entrenar", color=COLOR_SUBTITULO, fontsize=12,
     )
     ax.text(
         test.index[1], Y_MAX * 0.97, "Inicio de prueba",
@@ -128,7 +136,7 @@ def graficar(train, test, pron, m):
         f"techo de {pron['superior'].iloc[-1] / 1e6:,.1f} millones en "
         f"{ultimo:%m/%Y}",
         (ultimo, Y_MAX), xytext=(8, -6), textcoords="offset points",
-        color=COLOR_ESTIMACION, fontsize=11, va="top",
+        color=COLOR_NOTA, fontsize=11, va="top",
     )
 
     ax.set_title(
@@ -139,7 +147,7 @@ def graficar(train, test, pron, m):
         0, 1.02,
         f"Viajeros mensuales (turistas + excursionistas). ARIMA{ORDEN} se equivoca "
         f"en promedio por {m['MAE'] / 1000:,.0f} mil viajeros al mes (MAE).",
-        transform=ax.transAxes, fontsize=12, color=COLOR_HISTORIA,
+        transform=ax.transAxes, fontsize=12, color=COLOR_SUBTITULO,
     )
     ax.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda v, _: f"{v / 1000:,.0f} mil")
@@ -153,13 +161,13 @@ def graficar(train, test, pron, m):
     ))
     for lado in ["top", "right"]:
         ax.spines[lado].set_visible(False)
-    ax.grid(axis="y", color="#D4E2D6", lw=0.8)
+    ax.grid(axis="y", color=COLOR_REJILLA, lw=0.8)
     ax.tick_params(colors=COLOR_TEXTO)
 
     fig.tight_layout()
     SALIDA.mkdir(exist_ok=True)
     ruta = SALIDA / "07_pronostico_intervalo.png"
-    fig.savefig(ruta, dpi=200, facecolor="white")
+    fig.savefig(ruta, dpi=200, facecolor=COLOR_FONDO)
     plt.close(fig)
     return ruta
 
