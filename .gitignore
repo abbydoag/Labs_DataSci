@@ -265,3 +265,8 @@ Lab7/figuras/
 spark-warehouse/
 metastore_db/
 derby.log
+
+# Lab9 figuras
+# Las genera Lab9/pronostico.py; la infografia y sus graficas no se publican
+# abiertamente segun las instrucciones del laboratorio.
+Lab9/figuras/
